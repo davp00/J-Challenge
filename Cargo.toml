@@ -6,6 +6,8 @@ members = ["apps/cache_node", "apps/cache_master"]
 tokio = { version = "1.47.1", features = ["full"] }
 thiserror = { version = "2" }
 dashmap = { version = "6.1.0" }
+bytes = { version = "1.10.1" }
+uuid = { version = "1.18.1", features = ["v4"] }
 
 [workspace.package]
 edition = "2024"
