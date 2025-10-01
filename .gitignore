@@ -1,0 +1,73 @@
+# --- Rust / Cargo ---
+/target/
+/Cargo.lock
+**/target/
+/.cargo/
+/.cargo-ok
+
+# --- Build artifacts ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.rlib
+*.wasm
+*.a
+*.o
+
+# --- Rust tooling ---
+**/*.rs.bk
+**/*.rs.tmp
+
+# --- Logs y debugging ---
+*.log
+*.out
+*.err
+*.tmp
+*.swp
+*.swm
+*.swo
+*.swn
+*.swp
+*.DS_Store
+
+# --- IDEs y editores ---
+# VSCode
+.vscode/
+.history/
+*.code-workspace
+
+# JetBrains (CLion, IntelliJ, RustRover)
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# --- Testing / Coverage ---
+/coverage/
+**/coverage/
+*.profraw
+*.profdata
+lcov.info
+
+# --- Binaries de apps ---
+/apps/*/bin/
+/apps/*/dist/
+/apps/*/build/
+
+# --- Docs generados ---
+/doc/
+/target/doc/
+
+# --- OS / Misc ---
+Thumbs.db
+ehthumbs.db
+.DS_Store
+Desktop.ini

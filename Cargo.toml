@@ -1,0 +1,12 @@
+[workspace]
+resolver = "3"
+members = ["apps/cache_node", "apps/cache_master"]
+
+[workspace.dependencies]
+tokio = { version = "1.47.1", features = ["full"] }
+thiserror = { version = "2" }
+dashmap = { version = "6.1.0" }
+
+[workspace.package]
+edition = "2024"
+#rust-version = "1.89.0"
