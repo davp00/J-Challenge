@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/cache_node", "apps/cache_master"]
+members = ["apps/cache_node", "apps/cache_master", "crates/net"]
 
 [workspace.dependencies]
 tokio = { version = "1.47.1", features = ["full"] }

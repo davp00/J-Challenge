@@ -9,13 +9,13 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use crate::{
-    app_common::{AppError, SocketError},
-    app_net::{ParsedMsg, Socket, SocketResult, parse_line},
+use app_net::{
+    ParsedMsg, RequestDataInput, ResponseData, Socket, SocketError, parse_line, types::SocketResult,
 };
 
+use crate::app_common::AppError;
+
 pub mod app_common;
-pub mod app_net;
 
 type Registry = Arc<DashMap<String, Socket>>;
 
@@ -80,8 +80,32 @@ async fn handle_conn(socket: TcpStream, addr: SocketAddr, registry: Registry) ->
         })
     };
 
-    let mut line = String::new();
+    let sock_copy: Socket = sock.clone();
 
+    tokio::spawn(async move {
+        println!(
+            "Result PUT: {:?}",
+            sock_copy
+                .request(RequestDataInput::new("PUT", "test value"))
+                .await
+        );
+
+        println!(
+            "Result GET: {:?}",
+            sock_copy
+                .request(RequestDataInput::new("GET", "test"))
+                .await
+        );
+
+        println!(
+            "Result GET 2: {:?}",
+            sock_copy
+                .request(RequestDataInput::new("GET", "test2"))
+                .await
+        );
+    });
+
+    let mut line = String::new();
     loop {
         line.clear();
 
@@ -95,13 +119,20 @@ async fn handle_conn(socket: TcpStream, addr: SocketAddr, registry: Registry) ->
         }
 
         match parse_line(&line)? {
-            ParsedMsg::Res { id, payload } => {
+            ParsedMsg::Res { id, raw_response } => {
                 // Relacionamos respuesta pendiente
-                sock.handle_response(id, payload.to_string());
+                sock.handle_response(id, raw_response.to_string());
             }
-            ParsedMsg::Req { id, payload } => {
-                let reply = if payload == "ping" { "pong" } else { payload };
-                let _ = sock.send_res(id, reply);
+            ParsedMsg::Req { data } => {
+                let reply = if data.action == "PING" {
+                    "PONG"
+                } else {
+                    data.payload
+                };
+
+                let dummy_response = ResponseData::new(data.id, 200, reply.to_string());
+
+                let _ = sock.send_res(dummy_response);
             }
             ParsedMsg::Other(msg) => {
                 println!("Other Req: [{node_id}] -> {msg}");

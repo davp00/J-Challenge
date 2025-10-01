@@ -1,12 +1,11 @@
 [package]
-name = "cache_master"
+name = "app_net"
 version = "0.1.0"
 edition.workspace = true
 
+
 [dependencies]
 tokio = { workspace = true }
-thiserror = { workspace = true }
 dashmap = { workspace = true }
+thiserror = { workspace = true }
 bytes = { workspace = true }
-uuid = { workspace = true }
-app_net = { path = "../../crates/net" }
