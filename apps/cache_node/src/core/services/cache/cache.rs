@@ -46,6 +46,8 @@ impl<K: Eq + Hash + Clone + Send + Sync + 'static, V: Send + Sync + 'static> Cac
             wheel: TimingWheel::new(wheel_size, tick_ms, now),
         });
 
+        this.start_reaper();
+
         this
     }
 
