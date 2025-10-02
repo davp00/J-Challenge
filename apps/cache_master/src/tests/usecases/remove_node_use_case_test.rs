@@ -29,7 +29,7 @@ mod tests {
         let hasher = Arc::new(MockHasher::new());
         let net = Arc::new(MockNetwork::new());
         net.set_replica_count(1); // <= 1 → removerá también del hasher
-        net.set_remove_result(Ok(true)); // network.remove_node OK
+        net.set_remove_result(Ok(true)); // network OK
 
         let uc = RemoveNodeUseCase::new(hasher.clone(), net.clone());
 
@@ -39,7 +39,6 @@ mod tests {
         let out = uc.execute(input).await.expect("no debería fallar");
 
         assert!(out.success);
-        // opcional: verificar que se intentó remover del hasher y del network
         assert_eq!(hasher.last_remove_node.lock().as_deref(), Some("n1"));
         assert_eq!(net.last_remove_node.lock().as_deref(), Some("n1"));
     }
@@ -49,7 +48,7 @@ mod tests {
         let hasher = Arc::new(MockHasher::new());
         let net = Arc::new(MockNetwork::new());
         net.set_replica_count(2); // > 1 → NO removerá del hasher
-        net.set_remove_result(Ok(true)); // network.remove_node OK
+        net.set_remove_result(Ok(true)); // network OK
 
         let uc = RemoveNodeUseCase::new(hasher.clone(), net.clone());
 
@@ -58,9 +57,8 @@ mod tests {
         };
         let out = uc.execute(input).await.expect("no debería fallar");
 
-        // Éxito final: hasher_remove(false) && network_remove(true) == false
+        // success = hasher_remove(false) && network_remove(true) = false
         assert!(!out.success);
-        // Verifica que sólo se removió en red
         assert_eq!(hasher.last_remove_node.lock().as_deref(), None);
         assert_eq!(net.last_remove_node.lock().as_deref(), Some("n2"));
     }
@@ -69,8 +67,8 @@ mod tests {
     async fn fails_when_network_remove_returns_false() {
         let hasher = Arc::new(MockHasher::new());
         let net = Arc::new(MockNetwork::new());
-        net.set_replica_count(0); // camino que también intentaría hasher (no afecta el error esperado)
-        net.set_remove_result(Ok(false)); // <-- clave: simula que network NO encontró el nodo
+        net.set_replica_count(0);
+        net.set_remove_result(Ok(false)); // <— network dice “no encontrado”
 
         let uc = RemoveNodeUseCase::new(hasher, net);
 
@@ -90,7 +88,7 @@ mod tests {
         let hasher = Arc::new(MockHasher::new());
         let net = Arc::new(MockNetwork::new());
         net.set_replica_count(0);
-        net.set_remove_result(Err(AppError::ConnectionError("fail".into()))); // <-- clave
+        net.set_remove_result(Err(AppError::ConnectionError("fail".into())));
 
         let uc = RemoveNodeUseCase::new(hasher, net);
 

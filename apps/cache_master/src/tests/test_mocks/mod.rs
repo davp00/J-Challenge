@@ -14,6 +14,7 @@ pub struct MockHasher {
     // para inspección de llamadas
     pub last_add_node: Mutex<Option<String>>,
     pub last_node_exists: Mutex<Option<String>>,
+    pub last_remove_node: Mutex<Option<String>>, // <-- NUEVO
 }
 
 impl MockHasher {
@@ -23,6 +24,7 @@ impl MockHasher {
             node_exists_result: true,
             last_add_node: Mutex::new(None),
             last_node_exists: Mutex::new(None),
+            last_remove_node: Mutex::new(None), // <-- NUEVO
         }
     }
 
@@ -44,7 +46,8 @@ impl ConsistentHasherService for MockHasher {
         self.add_node_result
     }
 
-    fn remove_node(&self, _node_id: &str) -> bool {
+    fn remove_node(&self, node_id: &str) -> bool {
+        *self.last_remove_node.lock() = Some(node_id.to_string()); // <-- track
         true
     }
 
@@ -64,12 +67,13 @@ pub struct MockNetwork {
     pub add_master_result: Mutex<Result<bool, AppError>>,
     pub add_replica_result: Mutex<Result<bool, AppError>>,
 
+    pub replica_count: Mutex<usize>,
+    pub remove_result: Mutex<Result<bool, AppError>>,
+
     // para inspección de llamadas
     pub last_add_master: Mutex<Option<String>>,
     pub last_add_replica: Mutex<Option<(String, String)>>,
-
-    pub replica_count: Mutex<usize>,
-    pub remove_result: Mutex<Result<bool, AppError>>,
+    pub last_remove_node: Mutex<Option<String>>, // <-- NUEVO
 }
 
 impl MockNetwork {
@@ -78,10 +82,11 @@ impl MockNetwork {
             next_master_for_replica: Mutex::new(None),
             add_master_result: Mutex::new(Ok(true)),
             add_replica_result: Mutex::new(Ok(true)),
-            last_add_master: Mutex::new(None),
-            last_add_replica: Mutex::new(None),
             replica_count: Mutex::new(0),
             remove_result: Mutex::new(Ok(true)),
+            last_add_master: Mutex::new(None),
+            last_add_replica: Mutex::new(None),
+            last_remove_node: Mutex::new(None), // <-- NUEVO
         }
     }
 
@@ -95,11 +100,9 @@ impl MockNetwork {
     pub fn set_add_replica_result(&self, r: Result<bool, AppError>) {
         *self.add_replica_result.lock() = r;
     }
-
     pub fn set_replica_count(&self, count: usize) {
         *self.replica_count.lock() = count;
     }
-
     pub fn set_remove_result(&self, r: Result<bool, AppError>) {
         *self.remove_result.lock() = r;
     }
@@ -129,7 +132,8 @@ impl NetworkService for MockNetwork {
         self.add_replica_result.lock().clone()
     }
 
-    async fn remove_node(&self, _node_id: &str) -> Result<bool, AppError> {
+    async fn remove_node(&self, node_id: &str) -> Result<bool, AppError> {
+        *self.last_remove_node.lock() = Some(node_id.to_string()); // <-- track
         self.remove_result.lock().clone()
     }
 
