@@ -33,7 +33,7 @@ async fn main() -> Result<(), AppError> {
     });
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Bytes>();
-    let connection_socket = Socket::new("Nodo1".to_string(), tx, Duration::from_secs(10));
+    let connection_socket = Socket::new("MASTER 123".to_string(), tx, Duration::from_secs(10));
 
     let writer_task = {
         let id = connection_socket.id.clone();
@@ -48,7 +48,7 @@ async fn main() -> Result<(), AppError> {
     };
 
     connection_socket
-        .send_raw(Bytes::from_static(b"Nodo1\n"))
+        .send_raw(Bytes::from_static(b"MASTER 123\n"))
         .map_err(|e| AppError::SocketError(format!("Failed on identification: {}", e)))?;
 
     let req_socket = connection_socket.clone();

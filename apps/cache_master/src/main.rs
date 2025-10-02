@@ -1,5 +1,6 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 
+use app_core::UseCaseValidatable;
 use bytes::Bytes;
 use dashmap::DashMap;
 use tokio::{
@@ -13,9 +14,19 @@ use app_net::{
     ParsedMsg, RequestDataInput, ResponseData, Socket, SocketError, parse_line, types::SocketResult,
 };
 
-use crate::app_common::AppError;
+use crate::{
+    core::domain::models::{
+        AppError, EntryNode, NodeType, usecases::assign_node_use_case::AssignNodeUseCaseInput,
+    },
+    infrastructure::{
+        app_state::{AppNetworkNode, AppState},
+        di::CacheMasterModule,
+        utils::NodeKind,
+    },
+};
 
-pub mod app_common;
+pub mod core;
+pub mod infrastructure;
 
 type Registry = Arc<DashMap<String, Socket>>;
 
@@ -27,7 +38,8 @@ async fn main() -> Result<(), AppError> {
 
     println!("App listen in: {:?}", listener.local_addr().unwrap());
 
-    let registry: Registry = Arc::new(DashMap::new());
+    let app_state = AppState::new_shared();
+    let module_dependencies = Arc::new(CacheMasterModule::build_from_state(app_state.clone()));
 
     loop {
         let (socket, addr) = listener
@@ -35,17 +47,23 @@ async fn main() -> Result<(), AppError> {
             .await
             .map_err(|e| AppError::SocketError(format!("accept error: {e}")))?;
 
-        let registry = registry.clone();
+        let app_state = app_state.clone();
+        let module_dependencies = module_dependencies.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = handle_conn(socket, addr, registry).await {
+            if let Err(e) = handle_conn(socket, addr, app_state, module_dependencies).await {
                 eprintln!("conn error: {e}");
             }
         });
     }
 }
 
-async fn handle_conn(socket: TcpStream, addr: SocketAddr, registry: Registry) -> SocketResult<()> {
+async fn handle_conn(
+    socket: TcpStream,
+    addr: SocketAddr,
+    app_state: Arc<AppState>,
+    module_dependencies: Arc<CacheMasterModule>,
+) -> SocketResult<()> {
     let (reader, mut writer) = socket.into_split();
 
     let mut first_line = String::new();
@@ -60,14 +78,55 @@ async fn handle_conn(socket: TcpStream, addr: SocketAddr, registry: Registry) ->
         };
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Bytes>();
-    let sock = Socket::new(node_id.clone(), tx, Duration::from_secs(2));
-    registry.insert(node_id.clone(), sock.clone());
 
-    println!("Conectado {node_id} desde {addr}");
+    //TODO Remap error
+    let entry_node = EntryNode::from_str(node_id.as_str()).unwrap();
+    let id: Arc<str> = Arc::from(entry_node.id.as_str());
+
+    let sock = Arc::new(Socket::new(
+        entry_node.id.clone(),
+        tx,
+        Duration::from_secs(2),
+    ));
+    let network_node = AppNetworkNode::new_shared(sock.clone());
+
+    match entry_node.node_type {
+        NodeType::Master => {
+            app_state
+                .network_state
+                .nodes_registry
+                .insert(id.clone(), network_node.clone());
+            let _ = module_dependencies
+                .assign_node_use_case
+                .validate_and_execute(AssignNodeUseCaseInput {
+                    node_id: entry_node.id,
+                    node_type: NodeType::Master,
+                })
+                .await;
+        }
+        NodeType::Replica => {
+            app_state
+                .network_state
+                .nodes_registry
+                .insert(id.clone(), network_node.clone());
+            let _ = module_dependencies
+                .assign_node_use_case
+                .validate_and_execute(AssignNodeUseCaseInput {
+                    node_id: entry_node.id,
+                    node_type: NodeType::Replica,
+                })
+                .await;
+        }
+        NodeType::Client => {
+            println!("Client connected: {}", entry_node.id);
+        }
+    };
+
+    println!("Conectado {} desde {addr}", id);
 
     let writer_task = {
-        let node_id = node_id.clone();
-        let registry = registry.clone();
+        let node_id = id.clone();
+        let registry = app_state.network_state.nodes_registry.clone();
 
         tokio::spawn(async move {
             while let Some(bytes) = rx.recv().await {
@@ -80,7 +139,7 @@ async fn handle_conn(socket: TcpStream, addr: SocketAddr, registry: Registry) ->
         })
     };
 
-    let sock_copy: Socket = sock.clone();
+    let sock_copy = network_node.socket.clone();
 
     tokio::spawn(async move {
         println!(
@@ -135,7 +194,7 @@ async fn handle_conn(socket: TcpStream, addr: SocketAddr, registry: Registry) ->
                 let _ = sock.send_res(dummy_response);
             }
             ParsedMsg::Other(msg) => {
-                println!("Other Req: [{node_id}] -> {msg}");
+                println!("Other Req: [] -> {msg}");
             }
         }
     }
