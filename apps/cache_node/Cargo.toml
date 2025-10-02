@@ -12,6 +12,7 @@ async-trait = { workspace = true }
 parking_lot = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+dotenvy = { workspace = true }
 
 app_net = { path = "../../crates/net" }
 app_core = { path = "../../crates/core" }
