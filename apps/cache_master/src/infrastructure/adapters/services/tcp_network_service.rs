@@ -5,7 +5,10 @@ use async_trait::async_trait;
 use dashmap::{DashMap, Entry};
 
 use crate::{
-    core::domain::{models::AppError, services::NetworkService},
+    core::domain::{
+        models::{AppError, node},
+        services::NetworkService,
+    },
     infrastructure::{
         adapters::services::request_all_race_first_abort_rest,
         app_state::{AppNetworkNode, AppNetworkState},
@@ -245,5 +248,29 @@ impl NetworkService for TcpNetworkService {
         }
 
         Ok(None)
+    }
+
+    fn count_replica_nodes(&self, node_id: &str) -> usize {
+        let node = self
+            .network_state
+            .nodes_registry
+            .get(node_id)
+            .map(|r| r.value().clone());
+
+        if node.is_none() {
+            return 0;
+        }
+
+        let node = node.unwrap();
+
+        if node.get_master_id().is_none() {
+            return 0;
+        }
+
+        let master_node_id = node.get_master_id().unwrap();
+
+        self.get_shard(&master_node_id)
+            .map(|shard| shard.len())
+            .unwrap_or_default()
     }
 }

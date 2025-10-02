@@ -15,6 +15,8 @@ pub trait NetworkService: Send + Sync {
 
     async fn remove_node(&self, node_id: &str) -> Result<bool, AppError>;
 
+    fn count_replica_nodes(&self, node_id: &str) -> usize;
+
     async fn request_put_key(
         &self,
         node_id: &str,
