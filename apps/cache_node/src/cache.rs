@@ -1,8 +1,12 @@
 use std::{hash::Hash, sync::Arc};
 
 use dashmap::{DashMap, Entry};
+use parking_lot::Mutex;
 
-use crate::utils::clock::{AppClock, AppTime, Clock};
+use crate::{
+    lru::LruState,
+    utils::clock::{AppClock, AppTime, Clock},
+};
 
 #[derive(Clone)]
 pub(crate) struct CacheEntry<V> {
@@ -25,28 +29,54 @@ impl<V> CacheEntry<V> {
 pub(crate) struct Cache<K: Hash, V> {
     map: DashMap<K, CacheEntry<V>>,
     clock: Arc<AppClock>,
+    lru: Mutex<LruState<K>>,
 }
 
-impl<K: Eq + Hash, V> Cache<K, V> {
-    pub fn new() -> Arc<Self> {
+impl<K: Eq + Hash + Clone, V> Cache<K, V> {
+    pub fn new_with_capacity(capacity: usize) -> Arc<Self> {
+        assert!(capacity > 0, "capacity must be > 0");
+
         let this = Arc::new(Self {
             map: DashMap::new(),
             clock: Arc::new(AppClock::new()),
+            lru: Mutex::new(LruState::new(capacity)),
         });
 
         this
     }
 
-    pub fn put(&self, key: K, value: V, expires_at: Option<AppTime>) {
-        match self.map.entry(key) {
+    pub fn new() -> Arc<Self> {
+        Self::new_with_capacity(1024)
+    }
+
+    pub fn put(&self, key: K, value: V, expires_at: Option<AppTime>) -> bool {
+        match self.map.entry(key.clone()) {
             Entry::Occupied(mut occ) => {
-                let next_ver = occ.get().version.saturating_add(1);
-                *occ.get_mut() = CacheEntry::new(value, next_ver, expires_at);
+                let next = occ.get().version.saturating_add(1);
+                *occ.get_mut() = CacheEntry::new(value, next, expires_at);
             }
             Entry::Vacant(vac) => {
                 vac.insert(CacheEntry::new(value, 1, expires_at));
             }
         }
+
+        let to_evict = {
+            let mut lru = self.lru.lock();
+            lru.touch(key.clone());
+            if lru.over_capacity() {
+                lru.pop_back()
+            } else {
+                None
+            }
+        };
+
+        if let Some(evict_key) = to_evict
+            && evict_key != key
+        {
+            let _ = self.map.remove(&evict_key);
+        }
+
+        true
     }
 
     pub fn get(&self, key: &K) -> Option<Arc<V>> {
@@ -58,13 +88,41 @@ impl<K: Eq + Hash, V> Cache<K, V> {
                 .as_ref()
                 .is_some_and(|exp| exp.is_before_or_eq(&now))
             {
-                //drop(entry);
-                //let _ = self.map.remove(key);
+                drop(entry);
+                let _ = self.invalidate(key);
                 return None;
             }
+
+            let to_evict = {
+                let mut lru = self.lru.lock();
+                if lru.contains(key) {
+                    lru.touch(key.clone());
+                } else {
+                    lru.push_front(key.clone());
+                }
+                if lru.over_capacity() {
+                    lru.pop_back()
+                } else {
+                    None
+                }
+            };
+
+            if let Some(evict_key) = to_evict
+                && &evict_key != key
+            {
+                let _ = self.map.remove(&evict_key);
+            }
+
             return Some(entry.value.clone());
         }
         None
+    }
+
+    pub fn invalidate(&self, key: &K) -> bool {
+        let removed_map = self.map.remove(key).is_some();
+        let mut lru = self.lru.lock();
+        let removed_lru = lru.remove(key);
+        removed_map || removed_lru
     }
 
     pub fn len(&self) -> usize {
@@ -135,8 +193,8 @@ mod tests {
         );
 
         assert!(
-            cache.map.contains_key(&"k2"),
-            "entry stays in map because get() doesn't remove"
+            !cache.map.contains_key(&"k2"),
+            "expired entry should be removed from both map and LRU"
         );
     }
 
