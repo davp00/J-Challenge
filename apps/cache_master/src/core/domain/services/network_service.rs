@@ -12,4 +12,6 @@ pub trait NetworkService: Send + Sync {
 
     async fn add_replica_node(&self, master_node_id: &str, node_id: &str)
     -> Result<bool, AppError>;
+
+    async fn remove_node(&self, node_id: &str) -> Result<bool, AppError>;
 }

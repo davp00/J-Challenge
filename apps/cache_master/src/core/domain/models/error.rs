@@ -12,4 +12,7 @@ pub enum AppError {
 
     #[error("Connection Error: {0}")]
     ConnectionError(String),
+
+    #[error("Node not found: {0}")]
+    NodeNotFound(String),
 }

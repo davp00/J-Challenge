@@ -7,6 +7,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
     sync::mpsc,
+    time,
 };
 use uuid::Uuid;
 
@@ -16,7 +17,8 @@ use app_net::{
 
 use crate::{
     core::domain::models::{
-        AppError, EntryNode, NodeType, usecases::assign_node_use_case::AssignNodeUseCaseInput,
+        AppError, EntryNode, NodeType,
+        usecases::{RemoveNodeUseCaseInput, assign_node_use_case::AssignNodeUseCaseInput},
     },
     infrastructure::{
         app_state::{AppNetworkNode, AppState},
@@ -28,8 +30,6 @@ use crate::{
 pub mod core;
 pub mod infrastructure;
 
-type Registry = Arc<DashMap<String, Socket>>;
-
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
     let listener = TcpListener::bind("0.0.0.0:5555")
@@ -40,6 +40,17 @@ async fn main() -> Result<(), AppError> {
 
     let app_state = AppState::new_shared();
     let module_dependencies = Arc::new(CacheMasterModule::build_from_state(app_state.clone()));
+
+    let service = module_dependencies.tcp_network_service.clone();
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(10));
+
+        loop {
+            interval.tick().await;
+            println!("--- Network State {:?} ---", time::Instant::now());
+            service.pretty_print();
+        }
+    });
 
     loop {
         let (socket, addr) = listener
@@ -88,7 +99,7 @@ async fn handle_conn(
         tx,
         Duration::from_secs(2),
     ));
-    let network_node = AppNetworkNode::new_shared(sock.clone());
+    let network_node = AppNetworkNode::new_shared(sock.clone(), id.clone());
 
     match entry_node.node_type {
         NodeType::Master => {
@@ -102,7 +113,8 @@ async fn handle_conn(
                     node_id: entry_node.id,
                     node_type: NodeType::Master,
                 })
-                .await;
+                .await
+                .ok();
         }
         NodeType::Replica => {
             app_state
@@ -115,7 +127,8 @@ async fn handle_conn(
                     node_id: entry_node.id,
                     node_type: NodeType::Replica,
                 })
-                .await;
+                .await
+                .ok();
         }
         NodeType::Client => {
             println!("Client connected: {}", entry_node.id);
@@ -126,7 +139,6 @@ async fn handle_conn(
 
     let writer_task = {
         let node_id = id.clone();
-        let registry = app_state.network_state.nodes_registry.clone();
 
         tokio::spawn(async move {
             while let Some(bytes) = rx.recv().await {
@@ -135,34 +147,9 @@ async fn handle_conn(
                     break;
                 }
             }
-            registry.remove(&node_id);
+            println!("[{node_id}] writer task ended");
         })
     };
-
-    let sock_copy = network_node.socket.clone();
-
-    tokio::spawn(async move {
-        println!(
-            "Result PUT: {:?}",
-            sock_copy
-                .request(RequestDataInput::new("PUT", "test value"))
-                .await
-        );
-
-        println!(
-            "Result GET: {:?}",
-            sock_copy
-                .request(RequestDataInput::new("GET", "test"))
-                .await
-        );
-
-        println!(
-            "Result GET 2: {:?}",
-            sock_copy
-                .request(RequestDataInput::new("GET", "test2"))
-                .await
-        );
-    });
 
     let mut line = String::new();
     loop {
@@ -199,7 +186,18 @@ async fn handle_conn(
         }
     }
 
-    writer_task.abort();
+    module_dependencies
+        .delete_node_use_case
+        .validate_and_execute(RemoveNodeUseCaseInput {
+            node_id: id.to_string(),
+        })
+        .await
+        .ok();
 
+    //writer_task.abort();
+    drop(sock);
+
+    let _ = writer_task.await;
+    println!("Desconectado {} desde {addr}", id);
     Ok(())
 }

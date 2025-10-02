@@ -49,6 +49,28 @@ impl TcpNetworkService {
     {
         self.nodes.get(master_id)
     }
+
+    pub fn pretty_print(&self) {
+        println!(
+            "🚀 TcpNetworkService: {}",
+            self.network_state.nodes_registry.len()
+        );
+        for master_entry in self.nodes.iter() {
+            let master_id = master_entry.key();
+            let replicas = master_entry.value();
+
+            println!("  🌐 Master Node: {master_id}");
+
+            if replicas.is_empty() {
+                println!("    └─ (no replicas)");
+            } else {
+                for replica_entry in replicas.iter() {
+                    let replica_id = replica_entry.key();
+                    println!("    └─ 📦 Replica: {replica_id}");
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -76,6 +98,7 @@ impl NetworkService for TcpNetworkService {
         match shard.entry(Arc::<str>::from(node_id)) {
             Entry::Occupied(_) => Ok(false), // ya estaba como master en su shard
             Entry::Vacant(v) => {
+                node_arc.set_master_id(node_id);
                 v.insert(node_arc);
                 Ok(true)
             }
@@ -101,9 +124,64 @@ impl NetworkService for TcpNetworkService {
                 Ok(false)
             }
             Entry::Vacant(v) => {
+                replica_arc.set_master_id(master_node_id);
                 v.insert(replica_arc);
                 Ok(true)
             }
         }
+    }
+
+    async fn remove_node(&self, node_id: &str) -> Result<bool, AppError> {
+        let mut removed_topology = false;
+        let node_arc = self
+            .network_state
+            .nodes_registry
+            .get(node_id)
+            .map(|r| r.value().clone());
+
+        if let Some(node) = node_arc {
+            match node.get_master_id() {
+                // Réplica: vive dentro del shard de su master
+                Some(master_id) => {
+                    if let Some(shard) = self.nodes.get_mut(master_id.as_ref())
+                        && shard.remove(node_id).is_some()
+                    {
+                        removed_topology = true;
+                        node.master_id.write().take();
+
+                        let empty = shard.is_empty();
+                        drop(shard); // liberar lock del shard
+
+                        if empty {
+                            self.nodes.remove(master_id.as_ref());
+                        }
+                    }
+                }
+                // Master: su shard es su propio node_id
+                None => {
+                    //TODO: Manejar mucho mejor este caso
+                    return Err(AppError::ConnectionError(
+                        "Es un nodo perdido según nuestra logica :)".to_string(),
+                    ));
+                }
+            }
+        } else {
+            // No está en registry: intentamos barrer shards por si quedó colgado ahí
+            for mut shard in self.nodes.iter_mut() {
+                if shard.value_mut().remove(node_id).is_some() {
+                    removed_topology = true;
+                    break;
+                }
+            }
+            // O quizá era un master con shard vacío
+            if !removed_topology {
+                removed_topology |= self.nodes.remove(node_id).is_some();
+            }
+        }
+
+        // Remover SIEMPRE del registry (si existe)
+        let removed_registry = self.network_state.nodes_registry.remove(node_id).is_some();
+
+        Ok(removed_topology || removed_registry)
     }
 }

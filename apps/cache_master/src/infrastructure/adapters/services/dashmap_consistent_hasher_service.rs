@@ -30,6 +30,7 @@ impl DashmapConsistentHasherService {
         Arc::new(Self::new())
     }
 
+    //TODO change to twox-hash for better performance
     #[inline]
     fn hash_u64(&self, key: &str) -> u64 {
         let mut h = DefaultHasher::new();
@@ -100,5 +101,30 @@ impl ConsistentHasherService for DashmapConsistentHasherService {
             Some(node) => node.to_string(),
             None => String::new(),
         }
+    }
+
+    fn remove_node(&self, node_id: &str) -> bool {
+        if !self.real_nodes.contains_key(node_id) {
+            return false;
+        }
+
+        {
+            let mut ring = self.ring.write();
+            for i in 0..self.vnodes {
+                let vnode_key = format!("{node_id}#{i}");
+                let hv = self.hash_u64(&vnode_key);
+
+                // Solo elimina si el slot sigue apuntando a este nodo
+                if let Some(current) = ring.get(&hv)
+                    && current.as_ref() == node_id
+                {
+                    ring.remove(&hv);
+                }
+            }
+
+            ring.retain(|_, v| v.as_ref() != node_id);
+        }
+
+        self.real_nodes.remove(node_id).is_some()
     }
 }

@@ -2,20 +2,36 @@ use std::sync::Arc;
 
 use app_net::Socket;
 use dashmap::DashMap;
+use parking_lot::RwLock;
 
 pub struct AppNetworkNode {
+    pub master_id: RwLock<Option<Arc<str>>>,
+    pub node_id: Arc<str>,
     pub socket: Arc<Socket>,
 }
 
 impl AppNetworkNode {
     #[inline]
-    pub fn new(socket: Arc<Socket>) -> Self {
-        Self { socket }
+    pub fn new(socket: Arc<Socket>, node_id: Arc<str>) -> Self {
+        Self {
+            socket,
+            master_id: RwLock::new(None),
+            node_id,
+        }
     }
 
     #[inline]
-    pub fn new_shared(socket: Arc<Socket>) -> Arc<Self> {
-        Arc::new(Self::new(socket))
+    pub fn new_shared(socket: Arc<Socket>, node_id: Arc<str>) -> Arc<Self> {
+        Arc::new(Self::new(socket, node_id))
+    }
+
+    pub fn set_master_id(&self, id: &str) {
+        let mut g = self.master_id.write();
+        *g = Some(Arc::<str>::from(id));
+    }
+
+    pub fn get_master_id(&self) -> Option<Arc<str>> {
+        self.master_id.read().clone()
     }
 }
 

@@ -9,3 +9,4 @@ thiserror = { workspace = true }
 dashmap = { workspace = true }
 bytes = { workspace = true }
 app_net = { path = "../../crates/net" }
+app_core = { path = "../../crates/core" }

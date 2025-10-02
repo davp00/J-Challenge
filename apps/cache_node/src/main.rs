@@ -1,9 +1,11 @@
 pub mod cache;
 pub mod utils;
 
+use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
+use app_core::utils::generate_short_id;
 use app_net::request::RequestData;
 use app_net::request::data::RequestDataOwned;
 use bytes::Bytes;
@@ -23,6 +25,13 @@ pub(crate) struct AppData {
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
+    let role = env::var("ROLE").unwrap_or_else(|_| "MASTER".to_string());
+    let short_id = generate_short_id(8);
+
+    let node_identity = format!("{role} {short_id}");
+
+    println!("Node Identity: {node_identity}");
+
     let socket = TcpStream::connect("127.0.0.1:5555")
         .await
         .map_err(|e| AppError::SocketError(e.to_string()))?;
@@ -33,7 +42,7 @@ async fn main() -> Result<(), AppError> {
     });
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Bytes>();
-    let connection_socket = Socket::new("MASTER 123".to_string(), tx, Duration::from_secs(10));
+    let connection_socket = Socket::new(node_identity.clone(), tx, Duration::from_secs(10));
 
     let writer_task = {
         let id = connection_socket.id.clone();
@@ -48,7 +57,7 @@ async fn main() -> Result<(), AppError> {
     };
 
     connection_socket
-        .send_raw(Bytes::from_static(b"MASTER 123\n"))
+        .send_raw(Bytes::from(format!("{node_identity}\n")))
         .map_err(|e| AppError::SocketError(format!("Failed on identification: {}", e)))?;
 
     let req_socket = connection_socket.clone();
