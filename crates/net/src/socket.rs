@@ -5,12 +5,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use crate::request::RequestData;
 use crate::request::RequestDataInput;
 use crate::response::ResponseData;
 use crate::types::ReqId;
 use crate::types::SocketResult;
-use crate::utils::split_once_space;
 use bytes::Bytes;
 use dashmap::DashMap;
 use tokio::sync::{mpsc, oneshot};

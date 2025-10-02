@@ -7,5 +7,5 @@ pub trait ConsistentHasherService: Send + Sync {
 
     fn node_exists(&self, node_id: &str) -> bool;
 
-    fn get_node_id_from_hash(&self, hash: &str) -> String;
+    fn get_node_id_from_hash(&self, hash: &str) -> Option<String>;
 }

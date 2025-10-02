@@ -15,4 +15,7 @@ pub enum AppError {
 
     #[error("Node not found: {0}")]
     NodeNotFound(String),
+
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 }

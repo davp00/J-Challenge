@@ -14,4 +14,13 @@ pub trait NetworkService: Send + Sync {
     -> Result<bool, AppError>;
 
     async fn remove_node(&self, node_id: &str) -> Result<bool, AppError>;
+
+    async fn request_put_key(
+        &self,
+        node_id: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<bool, AppError>;
+
+    async fn request_get_key(&self, node_id: &str, key: &str) -> Result<Option<String>, AppError>;
 }

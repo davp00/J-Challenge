@@ -88,18 +88,18 @@ impl ConsistentHasherService for DashmapConsistentHasherService {
         self.real_nodes.contains_key(node_id)
     }
 
-    fn get_node_id_from_hash(&self, hash: &str) -> String {
+    fn get_node_id_from_hash(&self, hash: &str) -> Option<String> {
         let parsed = if let Ok(v) = u64::from_str_radix(hash.trim_start_matches("0x"), 16) {
             v
         } else if let Ok(v) = hash.parse::<u64>() {
             v
         } else {
-            return String::new();
+            return None;
         };
 
         match self.locate_node(parsed) {
-            Some(node) => node.to_string(),
-            None => String::new(),
+            Some(node) => Some(node.to_string()),
+            None => None,
         }
     }
 

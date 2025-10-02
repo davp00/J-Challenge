@@ -37,10 +37,11 @@ impl UseCase<RemoveNodeUseCaseInput, RemoveNodeUseCaseOutput, AppError> for Remo
         let node_id = input.node_id.as_ref();
 
         let hasher_service_remove_result = self.hasher_service.remove_node(node_id);
-
+        //TODO no remover de hasher service si existen replicas
         println!(
             "Remove node result from hasher service: {node_id} {hasher_service_remove_result}"
         );
+
         if !hasher_service_remove_result {
             return Err(AppError::NodeNotFound(format!(
                 "{node_id} in hasher service",

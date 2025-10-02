@@ -184,4 +184,17 @@ impl NetworkService for TcpNetworkService {
 
         Ok(removed_topology || removed_registry)
     }
+
+    async fn request_put_key(
+        &self,
+        node_id: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<bool, AppError> {
+        todo!()
+    }
+
+    async fn request_get_key(&self, node_id: &str, key: &str) -> Result<Option<String>, AppError> {
+        todo!()
+    }
 }
