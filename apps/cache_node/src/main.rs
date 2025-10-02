@@ -1,6 +1,3 @@
-pub mod cache;
-pub mod utils;
-
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,22 +5,42 @@ use std::time::Duration;
 use app_core::utils::generate_short_id;
 use app_net::request::RequestData;
 use app_net::request::data::RequestDataOwned;
-use app_net::utils::split_message;
 use bytes::Bytes;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
-use crate::app_common::AppError;
-use crate::cache::Cache;
+use crate::core::domain::models::{AppError, Response};
+use crate::core::services::ActionParserService;
+use crate::infrastructure::di::CacheNodeModule;
 use app_net::{ParsedMsg, RequestDataInput, ResponseData, Socket, parse_line};
 
 pub mod app_common;
-pub mod lru;
-pub mod timing_wheel;
+pub mod core;
+pub mod infrastructure;
 
-pub(crate) struct AppData {
-    cache: Arc<Cache<String, String>>,
+async fn handle_request_async(
+    app_module: Arc<CacheNodeModule>,
+    socket: Arc<Socket>,
+    data: RequestData<'_>,
+) {
+    let data = RequestDataOwned::from(data);
+
+    let app_module_clone = app_module.clone();
+    tokio::spawn(async move {
+        let reply = handle_request(app_module_clone, &data.action, &data.payload).await;
+
+        let response = ResponseData::new(data.id, 200, reply);
+
+        println!("Response: {:?}", response);
+        let _ = socket.send_res(response);
+    });
+}
+
+async fn handle_request(app_module: Arc<CacheNodeModule>, action: &str, payload: &str) -> String {
+    let cmd = ActionParserService::parse(action, payload);
+    let res: Response = app_module.request_controller_service.handle(cmd).await;
+    res.to_wire()
 }
 
 #[tokio::main]
@@ -35,17 +52,19 @@ async fn main() -> Result<(), AppError> {
 
     println!("Node Identity: {node_identity}");
 
+    let app_module = Arc::new(CacheNodeModule::init_dependencies());
+
     let socket = TcpStream::connect("127.0.0.1:5555")
         .await
         .map_err(|e| AppError::SocketError(e.to_string()))?;
     let (reader, mut writer) = socket.into_split();
 
-    let app_data = Arc::new(AppData {
-        cache: Cache::new(),
-    });
-
     let (tx, mut rx) = mpsc::unbounded_channel::<Bytes>();
-    let connection_socket = Socket::new(node_identity.clone(), tx, Duration::from_secs(10));
+    let connection_socket = Arc::new(Socket::new(
+        node_identity.clone(),
+        tx,
+        Duration::from_secs(10),
+    ));
 
     let writer_task = {
         let id = connection_socket.id.clone();
@@ -95,7 +114,7 @@ async fn main() -> Result<(), AppError> {
             match current_line {
                 ParsedMsg::Req { data } => {
                     println!("{:?}", data);
-                    handle_request_async(app_data.clone(), connection_socket.clone(), data).await;
+                    handle_request_async(app_module.clone(), connection_socket.clone(), data).await;
                 }
                 ParsedMsg::Res { id, raw_response } => {
                     connection_socket.handle_response(id, raw_response.to_string());
@@ -113,47 +132,4 @@ async fn main() -> Result<(), AppError> {
     writer_task.abort();
 
     Ok(())
-}
-
-async fn handle_request_async(app_data: Arc<AppData>, socket: Socket, data: RequestData<'_>) {
-    let data = RequestDataOwned::from(data);
-
-    tokio::spawn(async move {
-        let reply = handle_request(&data.action, &data.payload, app_data).await;
-
-        let response = ResponseData::new(data.id, 200, reply);
-
-        println!("Response: {:?}", response);
-        let _ = socket.send_res(response);
-    });
-}
-
-async fn handle_request(action: &str, payload: &str, app_data: Arc<AppData>) -> String {
-    let mut parts = split_message(payload).into_iter();
-    let key = parts.next().unwrap_or_default();
-
-    match action.to_ascii_uppercase().as_str() {
-        "PING" => "pong".to_string(),
-        "PUT" => {
-            let value = parts.next().unwrap_or_default();
-
-            if key.is_empty() || value.is_empty() {
-                return "EMPTY".to_string();
-            }
-
-            app_data.cache.put(key.to_string(), value.to_string(), None);
-
-            "".to_string()
-        }
-        "GET" => {
-            let key_value = app_data.cache.get(&key.to_string());
-
-            if let Some(value) = key_value {
-                return format!("{}", value);
-            }
-
-            "".to_string()
-        }
-        other => format!("echo:{other}"),
-    }
 }

@@ -209,10 +209,18 @@ impl NetworkService for TcpNetworkService {
         node_id: &str,
         key: &str,
         value: &str,
+        ttl: Option<u64>,
     ) -> Result<bool, AppError> {
+        let ttl_str = ttl.map(|t| t.to_string()).unwrap_or_default();
+
+        //TODO Find a better way to format this
+        let payload = format!(r#"{} "{}" {}"#, key, value, ttl_str)
+            .trim()
+            .to_string();
+
         let request = RequestDataInput {
             action: "PUT",
-            payload: &format!("{} \"{}\"", key, value),
+            payload: &payload,
         };
 
         let nodes = self.get_all_nodes(node_id);

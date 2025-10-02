@@ -2,6 +2,7 @@
 pub struct PutKeyUseCaseInput {
     pub key: String,
     pub value: String,
+    pub ttl: Option<u64>,
 }
 
 #[derive(Debug)]

@@ -1,14 +1,11 @@
 use std::{hash::Hash, sync::Arc};
 
+use app_core::clock::{AppClock, AppTime, Clock};
 use dashmap::{DashMap, Entry};
 use parking_lot::Mutex;
 use tokio::time;
 
-use crate::{
-    lru::LruState,
-    timing_wheel::TimingWheel,
-    utils::clock::{AppClock, AppTime, Clock},
-};
+use crate::core::services::cache::{lru::LruState, timing_wheel::TimingWheel};
 
 #[derive(Clone)]
 pub(crate) struct CacheEntry<V> {
@@ -28,7 +25,7 @@ impl<V> CacheEntry<V> {
     }
 }
 
-pub(crate) struct Cache<K: Eq + Hash + Clone + Send + Sync + 'static, V: Send + Sync + 'static> {
+pub struct Cache<K: Eq + Hash + Clone + Send + Sync + 'static, V: Send + Sync + 'static> {
     map: DashMap<K, CacheEntry<V>>,
     clock: Arc<AppClock>,
     lru: Mutex<LruState<K>>,
@@ -56,7 +53,14 @@ impl<K: Eq + Hash + Clone + Send + Sync + 'static, V: Send + Sync + 'static> Cac
         Self::new_with_capacity(1024, 1024, 1000)
     }
 
-    pub fn put(&self, key: K, value: V, expires_at: Option<AppTime>) -> bool {
+    pub fn put(&self, key: K, value: V, ttl: Option<u64>) -> bool {
+        let expires_at = match ttl {
+            Some(ttl_ms) => Some(AppTime::new(
+                self.clock.now_millis().as_millis_u64() + ttl_ms,
+            )),
+            None => None,
+        };
+
         if let Some(exp) = &expires_at {
             self.wheel.schedule(key.clone(), exp.as_millis_u64());
         } else {
@@ -191,7 +195,7 @@ mod tests {
         cache.put("key1", "value1", None);
         assert_eq!(cache.len(), 1);
 
-        cache.put("key2", "value2", Some(AppTime::new(12345)));
+        cache.put("key2", "value2", Some(12345));
         assert_eq!(cache.len(), 2);
     }
 
@@ -202,13 +206,13 @@ mod tests {
         assert_eq!(cache.len(), 1);
 
         // Sobrescribe la misma clave
-        cache.put("key1", "value2", Some(AppTime::new(100)));
+        cache.put("key1", "value2", Some(100));
         assert_eq!(cache.len(), 1);
 
         let entry = cache.map.get("key1").unwrap();
         assert_eq!(entry.value.as_ref(), &"value2");
         assert_eq!(entry.version, 2);
-        assert_eq!(entry.expires_at, Some(AppTime::new(100)));
+        assert!(entry.expires_at.is_some());
     }
 
     #[test]
@@ -233,7 +237,7 @@ mod tests {
     fn get_returns_none_when_expired_in_past_and_does_not_remove() {
         let cache = Cache::<&str, &str>::new();
 
-        cache.put("k2", "v2", Some(AppTime::new(0)));
+        cache.put("k2", "v2", Some(0));
 
         assert!(
             cache.get(&"k2").is_none(),
@@ -251,7 +255,7 @@ mod tests {
         let cache = Cache::<&str, &str>::new();
 
         let now = cache.clock.now_millis();
-        cache.put("k3", "v3", Some(now));
+        cache.put("k3", "v3", Some(now.as_millis_u64()));
 
         assert!(
             cache.get(&"k3").is_none(),
@@ -337,11 +341,8 @@ mod tests {
         let cache = Cache::new_with_capacity(128, 16, 10);
 
         let now = cache.clock.now_millis();
-        let exp = AppTime::new(now.as_millis_u64()); // clonado semántico por claridad
-        // expirar en ~30ms
-        let exp = AppTime::new(now.as_millis_u64() + 30);
 
-        cache.put("kx", "vx", Some(exp));
+        cache.put("kx", "vx", Some(30));
 
         // Aún no debe expirar si no avanzamos el wheel y no ha pasado suficiente tiempo real
         assert!(cache.get(&"kx").is_some());
@@ -363,11 +364,11 @@ mod tests {
 
         let now = cache.clock.now_millis();
         let near = AppTime::new(now.as_millis_u64() + 20);
-        cache.put("kext", "v", Some(near));
+        cache.put("kext", "v", Some(20));
 
         // Antes de que pase el near, extiendo el TTL a +200ms
-        let later = AppTime::new(now.as_millis_u64() + 200);
-        cache.put("kext", "v", Some(later));
+
+        cache.put("kext", "v", Some(200));
 
         // Espera 50ms: suficiente para que el "near" hubiera expirado, pero no el "later"
         thread::sleep(Duration::from_millis(50));

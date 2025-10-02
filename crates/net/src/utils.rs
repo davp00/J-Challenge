@@ -6,6 +6,7 @@ pub fn split_once_space(input: &str) -> Result<(&str, &str), SocketError> {
         .ok_or_else(|| SocketError::BadMessage(input.to_string()))
 }
 
+//TODO Remove from here and use the one in app_core
 pub fn split_message(input: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut i = 0;

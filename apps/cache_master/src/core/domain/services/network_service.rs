@@ -22,6 +22,7 @@ pub trait NetworkService: Send + Sync {
         node_id: &str,
         key: &str,
         value: &str,
+        ttl: Option<u64>,
     ) -> Result<bool, AppError>;
 
     async fn request_get_key(&self, node_id: &str, key: &str) -> Result<Option<String>, AppError>;
