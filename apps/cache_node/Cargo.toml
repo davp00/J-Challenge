@@ -10,3 +10,4 @@ dashmap = { workspace = true }
 bytes = { workspace = true }
 app_net = { path = "../../crates/net" }
 app_core = { path = "../../crates/core" }
+parking_lot = "0.12.4"
