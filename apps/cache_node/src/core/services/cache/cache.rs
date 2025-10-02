@@ -8,7 +8,7 @@ use tokio::time;
 use crate::core::services::cache::{lru::LruState, timing_wheel::TimingWheel};
 
 #[derive(Clone)]
-pub(crate) struct CacheEntry<V> {
+pub struct CacheEntry<V> {
     pub value: Arc<V>,
     pub version: u64,
     pub expires_at: Option<AppTime>,

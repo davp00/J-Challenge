@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use app_core::{
-    UseCase, UseCaseValidatable,
-    clock::{AppTime, Clock},
-};
+use app_core::{UseCase, UseCaseValidatable, clock::Clock};
 use async_trait::async_trait;
 use tracing::trace;
 

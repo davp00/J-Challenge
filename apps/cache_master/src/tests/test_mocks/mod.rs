@@ -1,20 +1,24 @@
 use async_trait::async_trait;
 use parking_lot::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::core::domain::{
     models::AppError,
     services::{ConsistentHasherService, NetworkService},
 };
+use app_core::clock::{AppTime, Clock};
+
+// ----------------- MockHasher -----------------
 
 pub struct MockHasher {
     // respuestas configurables
     pub add_node_result: bool,
     pub node_exists_result: bool,
 
-    // NUEVO: nodo que devolverá get_node_id_from_hash
+    // nodo que devolverá get_node_id_from_hash
     pub node_for_hash: Mutex<Option<String>>,
 
-    // para inspección de llamadas
+    // tracking
     pub last_add_node: Mutex<Option<String>>,
     pub last_node_exists: Mutex<Option<String>>,
     pub last_remove_node: Mutex<Option<String>>,
@@ -25,7 +29,7 @@ impl MockHasher {
         Self {
             add_node_result: true,
             node_exists_result: true,
-            node_for_hash: Mutex::new(None), // NUEVO
+            node_for_hash: Mutex::new(None),
             last_add_node: Mutex::new(None),
             last_node_exists: Mutex::new(None),
             last_remove_node: Mutex::new(None),
@@ -39,7 +43,6 @@ impl MockHasher {
         }
     }
 
-    // NUEVO
     pub fn set_node_for_hash(&self, node_id: Option<&str>) {
         *self.node_for_hash.lock() = node_id.map(|s| s.to_string());
     }
@@ -62,26 +65,32 @@ impl ConsistentHasherService for MockHasher {
         self.node_exists_result
     }
     fn get_node_id_from_hash(&self, _hash: &str) -> Option<String> {
-        self.node_for_hash.lock().clone() // NUEVO
+        self.node_for_hash.lock().clone()
     }
 }
 
+// ----------------- MockNetwork -----------------
+
 pub struct MockNetwork {
-    // respuestas configurables
+    // configurables
     pub next_master_for_replica: Mutex<Option<String>>,
     pub add_master_result: Mutex<Result<bool, AppError>>,
     pub add_replica_result: Mutex<Result<bool, AppError>>,
     pub replica_count: Mutex<usize>,
     pub remove_result: Mutex<Result<bool, AppError>>,
 
-    // NUEVO: control del GET
+    // GET
     pub request_get_key_result: Mutex<Result<Option<String>, AppError>>,
 
-    // para inspección de llamadas
+    // PUT
+    pub request_put_key_result: Mutex<Result<bool, AppError>>,
+
+    // tracking
     pub last_add_master: Mutex<Option<String>>,
     pub last_add_replica: Mutex<Option<(String, String)>>,
     pub last_remove_node: Mutex<Option<String>>,
-    pub last_request_get: Mutex<Option<(String, String)>>, // NUEVO (node_id, key)
+    pub last_request_get: Mutex<Option<(String, String)>>,
+    pub last_request_put: Mutex<Option<(String, String, String, Option<u64>)>>,
 }
 
 impl MockNetwork {
@@ -92,14 +101,17 @@ impl MockNetwork {
             add_replica_result: Mutex::new(Ok(true)),
             replica_count: Mutex::new(0),
             remove_result: Mutex::new(Ok(true)),
-            request_get_key_result: Mutex::new(Ok(None)), // NUEVO
+            request_get_key_result: Mutex::new(Ok(None)),
+            request_put_key_result: Mutex::new(Ok(true)),
             last_add_master: Mutex::new(None),
             last_add_replica: Mutex::new(None),
             last_remove_node: Mutex::new(None),
-            last_request_get: Mutex::new(None), // NUEVO
+            last_request_get: Mutex::new(None),
+            last_request_put: Mutex::new(None),
         }
     }
 
+    // setters helpers
     pub fn set_next_master(&self, id: Option<&str>) {
         *self.next_master_for_replica.lock() = id.map(|s| s.to_string());
     }
@@ -115,9 +127,11 @@ impl MockNetwork {
     pub fn set_remove_result(&self, r: Result<bool, AppError>) {
         *self.remove_result.lock() = r;
     }
-
     pub fn set_request_get_key_result(&self, r: Result<Option<String>, AppError>) {
         *self.request_get_key_result.lock() = r;
+    }
+    pub fn set_request_put_key_result(&self, r: Result<bool, AppError>) {
+        *self.request_put_key_result.lock() = r;
     }
 }
 
@@ -144,26 +158,53 @@ impl NetworkService for MockNetwork {
         *self.last_add_replica.lock() = Some((master_node_id.to_string(), node_id.to_string()));
         self.add_replica_result.lock().clone()
     }
+
     async fn remove_node(&self, node_id: &str) -> Result<bool, AppError> {
         *self.last_remove_node.lock() = Some(node_id.to_string());
         self.remove_result.lock().clone()
     }
+
     fn count_replica_nodes(&self, _node_id: &str) -> usize {
         *self.replica_count.lock()
     }
 
     async fn request_put_key(
         &self,
-        _node_id: &str,
-        _key: &str,
-        _value: &str,
-        _ttl: Option<u64>,
+        node_id: &str,
+        key: &str,
+        value: &str,
+        ttl: Option<u64>,
     ) -> Result<bool, AppError> {
-        Ok(true)
+        *self.last_request_put.lock() =
+            Some((node_id.to_string(), key.to_string(), value.to_string(), ttl));
+        self.request_put_key_result.lock().clone()
     }
 
     async fn request_get_key(&self, node_id: &str, key: &str) -> Result<Option<String>, AppError> {
         *self.last_request_get.lock() = Some((node_id.to_string(), key.to_string()));
-        self.request_get_key_result.lock().clone() // NUEVO
+        self.request_get_key_result.lock().clone()
+    }
+}
+
+// ----------------- MockClock -----------------
+
+pub struct MockClock {
+    pub now_ms: AtomicU64,
+}
+
+impl MockClock {
+    pub fn new(initial_ms: u64) -> Self {
+        Self {
+            now_ms: AtomicU64::new(initial_ms),
+        }
+    }
+    pub fn set_now(&self, ms: u64) {
+        self.now_ms.store(ms, Ordering::SeqCst);
+    }
+}
+
+impl Clock for MockClock {
+    fn now_millis(&self) -> AppTime {
+        AppTime::new(self.now_ms.load(Ordering::SeqCst))
     }
 }
