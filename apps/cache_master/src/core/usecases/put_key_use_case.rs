@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use app_core::{UseCase, UseCaseValidatable};
 use async_trait::async_trait;
+use tracing::trace;
 
 use crate::core::domain::{
     models::{
@@ -32,7 +33,6 @@ impl PutKeyUseCase {
 impl UseCase<PutKeyUseCaseInput, PutKeyUseCaseOutput, AppError> for PutKeyUseCase {
     async fn execute(&self, input: PutKeyUseCaseInput) -> Result<PutKeyUseCaseOutput, AppError> {
         let hash = self.hasher_service.create_hash(&input.key);
-        println!("Hash for key {}: {}", input.key, hash);
 
         let node_id_option = self.hasher_service.get_node_id_from_hash(&hash);
 
@@ -44,7 +44,7 @@ impl UseCase<PutKeyUseCaseInput, PutKeyUseCaseOutput, AppError> for PutKeyUseCas
         }
 
         let node_id = node_id_option.unwrap();
-        println!("Node ID for key {}: {}", input.key, node_id);
+        trace!("Node ID {} for key: {} {:?}", node_id, input.key, input.ttl);
 
         let put_result = self
             .network_service

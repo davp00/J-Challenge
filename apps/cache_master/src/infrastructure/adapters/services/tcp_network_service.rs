@@ -5,10 +5,7 @@ use async_trait::async_trait;
 use dashmap::{DashMap, Entry};
 
 use crate::{
-    core::domain::{
-        models::{AppError, node},
-        services::NetworkService,
-    },
+    core::domain::{models::AppError, services::NetworkService},
     infrastructure::{
         adapters::services::request_all_race_first_abort_rest,
         app_state::{AppNetworkNode, AppNetworkState},

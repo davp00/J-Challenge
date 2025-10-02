@@ -1,4 +1,5 @@
-use crate::utils::split_message;
+use app_core::utils::split_message;
+
 use crate::{error::SocketError, types::ReqId};
 use std::str::FromStr;
 

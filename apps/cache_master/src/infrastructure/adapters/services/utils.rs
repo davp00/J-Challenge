@@ -9,8 +9,6 @@ pub async fn request_all_race_first_abort_rest(
     sockets: &[Arc<AppNetworkNode>],
     input: RequestDataInput<'_>,
 ) -> SocketResult<ResponseData> {
-    println!("Racing request to {} nodes", sockets.len());
-
     if sockets.is_empty() {
         return Err(SocketError::ConnectionError("no hay sockets".into()));
     }

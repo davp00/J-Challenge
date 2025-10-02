@@ -1,0 +1,16 @@
+### Ping
+GET http://localhost:3000/ping
+Accept: application/json
+
+### Put con TTL
+PUT http://localhost:3000/kv/testkey3
+Content-Type: application/json
+
+{
+  "value": "hola",
+  "ttl": 10000
+}
+
+### Get
+GET http://localhost:3000/kv/testkey3
+Accept: application/json

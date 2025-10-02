@@ -13,6 +13,7 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
+use tracing::{error, trace};
 
 #[derive(Clone)]
 pub struct Socket {
@@ -48,7 +49,7 @@ impl Socket {
 
         let line: String = request_data.to_string();
 
-        print!("Request: {}", line);
+        trace!("Request: {:?}", request_data);
 
         //TODO Find a better way to handle clone
         self.pending.insert(request_data.id.clone().into(), tx_resp);
@@ -70,18 +71,20 @@ impl Socket {
 
         let response_data = ResponseData::from_str(resp.as_str())?;
 
+        trace!("Response: {:?}", response_data);
+
         Ok(response_data)
     }
 
     //Para Manejar una respuesta asincrona, lo llamamos desde la tarea lectora
     pub fn handle_response(&self, req_id: ReqId, payload: String) {
-        println!("Response {req_id} payload={payload}");
+        //trace!("Response {req_id} payload={payload}");
 
         if let Some((_, tx)) = self.pending.remove(&req_id) {
             let _ = tx.send(payload);
         } else {
             // Log útil para ver si llega un RES que nadie espera
-            eprintln!(
+            error!(
                 "[{}] RES desconocido id={}, payload={}",
                 self.id, req_id, payload
             );
