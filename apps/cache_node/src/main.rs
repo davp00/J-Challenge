@@ -21,7 +21,7 @@ pub mod infrastructure;
 
 async fn handle_request_async(
     app_module: Arc<CacheNodeModule>,
-    socket: Socket,
+    socket: Arc<Socket>,
     data: RequestData<'_>,
 ) {
     let data = RequestDataOwned::from(data);
@@ -60,7 +60,11 @@ async fn main() -> Result<(), AppError> {
     let (reader, mut writer) = socket.into_split();
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Bytes>();
-    let connection_socket = Socket::new(node_identity.clone(), tx, Duration::from_secs(10));
+    let connection_socket = Arc::new(Socket::new(
+        node_identity.clone(),
+        tx,
+        Duration::from_secs(10),
+    ));
 
     let writer_task = {
         let id = connection_socket.id.clone();

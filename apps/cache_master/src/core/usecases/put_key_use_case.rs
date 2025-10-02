@@ -48,7 +48,7 @@ impl UseCase<PutKeyUseCaseInput, PutKeyUseCaseOutput, AppError> for PutKeyUseCas
 
         let put_result = self
             .network_service
-            .request_put_key(&node_id, &input.key, &input.value)
+            .request_put_key(&node_id, &input.key, &input.value, input.ttl)
             .await?;
 
         Ok(PutKeyUseCaseOutput {

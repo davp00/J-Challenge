@@ -10,7 +10,11 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use app_net::{ParsedMsg, ResponseData, Socket, SocketError, parse_line, types::SocketResult};
+use app_net::{
+    ParsedMsg, ResponseData, Socket, SocketError, parse_line,
+    request::{RequestData, data::RequestDataOwned},
+    types::SocketResult,
+};
 
 use crate::{
     core::domain::models::{
@@ -21,6 +25,7 @@ use crate::{
         },
     },
     infrastructure::{
+        adapters::controllers::request_controller::{self, RequestController},
         app_state::{AppNetworkNode, AppState},
         di::CacheMasterModule,
     },
@@ -28,6 +33,30 @@ use crate::{
 
 pub mod core;
 pub mod infrastructure;
+
+async fn handle_request_async(
+    request_controller: Arc<RequestController>,
+    socket: Arc<Socket>,
+    data: RequestData<'_>,
+) {
+    let data = RequestDataOwned::from(data);
+
+    let request_controller = request_controller.clone();
+    tokio::spawn(async move {
+        let reply = request_controller
+            .handle_request(&data.action, &data.payload)
+            .await;
+
+        let response = if let Ok(reply) = reply {
+            ResponseData::new(data.id, 200, reply)
+        } else {
+            ResponseData::new(data.id, 500, format!("ERROR {}", reply.err().unwrap()))
+        };
+
+        println!("Response: {:?}", response);
+        let _ = socket.send_res(response);
+    });
+}
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
@@ -39,11 +68,12 @@ async fn main() -> Result<(), AppError> {
 
     let app_state = AppState::new_shared();
     let module_dependencies = Arc::new(CacheMasterModule::build_from_state(app_state.clone()));
+    let request_controller = Arc::new(RequestController::new(module_dependencies.clone()));
 
     let service = module_dependencies.tcp_network_service.clone();
-    let app_state_clone = app_state.clone();
+    //let app_state_clone = app_state.clone();
 
-    let modules_dependencies_clone = module_dependencies.clone();
+    //let modules_dependencies_clone = module_dependencies.clone();
     tokio::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(10));
 
@@ -51,40 +81,7 @@ async fn main() -> Result<(), AppError> {
             interval.tick().await;
             println!("--- Network State {:?} ---", time::Instant::now());
             service.pretty_print();
-
-            if !app_state_clone.network_state.nodes_registry.is_empty() {
-                println!("--- Test Use Cases ---");
-
-                println!(
-                    "PUT KEY {:?}",
-                    modules_dependencies_clone
-                        .put_key_use_case
-                        .validate_and_execute(PutKeyUseCaseInput {
-                            key: "mykey".to_string(),
-                            value: "myvalue".to_string(),
-                        })
-                        .await
-                );
-
-                let key1 = String::from("mykey");
-                let key2 = String::from("mykey2");
-
-                println!(
-                    "GET KEY {:?}",
-                    modules_dependencies_clone
-                        .get_key_use_case
-                        .validate_and_execute(GetKeyUseCaseInput { key: key1 })
-                        .await
-                );
-
-                println!(
-                    "GET KEY {:?}",
-                    modules_dependencies_clone
-                        .get_key_use_case
-                        .validate_and_execute(GetKeyUseCaseInput { key: key2 })
-                        .await
-                );
-            }
+            println!("---------------------------");
         }
     });
 
@@ -96,9 +93,18 @@ async fn main() -> Result<(), AppError> {
 
         let app_state = app_state.clone();
         let module_dependencies = module_dependencies.clone();
+        let request_controller = request_controller.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = handle_conn(socket, addr, app_state, module_dependencies).await {
+            if let Err(e) = handle_conn(
+                socket,
+                addr,
+                app_state,
+                module_dependencies,
+                request_controller,
+            )
+            .await
+            {
                 eprintln!("conn error: {e}");
             }
         });
@@ -110,6 +116,7 @@ async fn handle_conn(
     addr: SocketAddr,
     app_state: Arc<AppState>,
     module_dependencies: Arc<CacheMasterModule>,
+    request_controller: Arc<RequestController>,
 ) -> SocketResult<()> {
     let (reader, mut writer) = socket.into_split();
 
@@ -130,38 +137,25 @@ async fn handle_conn(
     let entry_node = EntryNode::from_str(node_id.as_str()).unwrap();
     let id: Arc<str> = Arc::from(entry_node.id.as_str());
 
-    let sock = Arc::new(Socket::new(
+    let connection_socket = Arc::new(Socket::new(
         entry_node.id.clone(),
         tx,
         Duration::from_secs(2),
     ));
-    let network_node = AppNetworkNode::new_shared(sock.clone(), id.clone());
+    let network_node = AppNetworkNode::new_shared(connection_socket.clone(), id.clone());
 
     match entry_node.node_type {
-        NodeType::Master => {
+        NodeType::Master | NodeType::Replica => {
             app_state
                 .network_state
                 .nodes_registry
                 .insert(id.clone(), network_node.clone());
+
             let _ = module_dependencies
                 .assign_node_use_case
                 .validate_and_execute(AssignNodeUseCaseInput {
                     node_id: entry_node.id,
-                    node_type: NodeType::Master,
-                })
-                .await
-                .ok();
-        }
-        NodeType::Replica => {
-            app_state
-                .network_state
-                .nodes_registry
-                .insert(id.clone(), network_node.clone());
-            let _ = module_dependencies
-                .assign_node_use_case
-                .validate_and_execute(AssignNodeUseCaseInput {
-                    node_id: entry_node.id,
-                    node_type: NodeType::Replica,
+                    node_type: entry_node.node_type,
                 })
                 .await
                 .ok();
@@ -203,18 +197,12 @@ async fn handle_conn(
         match parse_line(&line)? {
             ParsedMsg::Res { id, raw_response } => {
                 // Relacionamos respuesta pendiente
-                sock.handle_response(id, raw_response.to_string());
+                connection_socket.handle_response(id, raw_response.to_string());
             }
             ParsedMsg::Req { data } => {
-                let reply = if data.action == "PING" {
-                    "PONG"
-                } else {
-                    data.payload
-                };
-
-                let dummy_response = ResponseData::new(data.id, 200, reply.to_string());
-
-                let _ = sock.send_res(dummy_response);
+                println!("{:?}", data);
+                handle_request_async(request_controller.clone(), connection_socket.clone(), data)
+                    .await;
             }
             ParsedMsg::Other(msg) => {
                 println!("Other Req: [] -> {msg}");
@@ -231,7 +219,7 @@ async fn handle_conn(
         .ok();
 
     //writer_task.abort();
-    drop(sock);
+    drop(connection_socket);
 
     let _ = writer_task.await;
     println!("Desconectado {} desde {addr}", id);
