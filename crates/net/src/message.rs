@@ -1,5 +1,3 @@
-use tracing::trace;
-
 use crate::error::SocketError;
 use crate::request::RequestData;
 use crate::types::ReqId;

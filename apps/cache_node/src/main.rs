@@ -23,6 +23,7 @@ use crate::infrastructure::di::CacheNodeModule;
 pub mod app_common;
 pub mod core;
 pub mod infrastructure;
+pub mod test_mocks;
 
 // ---------- helpers ----------
 

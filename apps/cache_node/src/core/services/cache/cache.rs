@@ -46,8 +46,6 @@ impl<K: Eq + Hash + Clone + Send + Sync + 'static, V: Send + Sync + 'static> Cac
             wheel: TimingWheel::new(wheel_size, tick_ms, now),
         });
 
-        this.start_reaper();
-
         this
     }
 
@@ -256,8 +254,7 @@ mod tests {
     fn get_returns_none_when_expiration_equals_now_boundary() {
         let cache = Cache::<&str, &str>::new();
 
-        let now = cache.clock.now_millis();
-        cache.put("k3", "v3", Some(now.as_millis_u64()));
+        cache.put("k3", "v3", Some(0));
 
         assert!(
             cache.get(&"k3").is_none(),
@@ -342,8 +339,6 @@ mod tests {
         // rueda chica: wheel_size=16 (potencia de 2), tick=10ms
         let cache = Cache::new_with_capacity(128, 16, 10);
 
-        let now = cache.clock.now_millis();
-
         cache.put("kx", "vx", Some(30));
 
         // Aún no debe expirar si no avanzamos el wheel y no ha pasado suficiente tiempo real
@@ -364,8 +359,6 @@ mod tests {
     fn wheel_does_not_expire_if_ttl_extended_before_tick() {
         let cache = Cache::new_with_capacity(128, 16, 10);
 
-        let now = cache.clock.now_millis();
-        let near = AppTime::new(now.as_millis_u64() + 20);
         cache.put("kext", "v", Some(20));
 
         // Antes de que pase el near, extiendo el TTL a +200ms

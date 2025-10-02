@@ -14,14 +14,14 @@ pub fn split_message(input: &str) -> Vec<&str> {
     let bytes = input.as_bytes();
     let mut i = 0usize;
 
-    let mut skip_spaces = |mut j: usize| {
+    let skip_spaces = |mut j: usize| {
         while j < bytes.len() && bytes[j] == b' ' {
             j += 1;
         }
         j
     };
 
-    let mut read_token = |mut i: usize| -> Option<(usize, usize, usize)> {
+    let read_token = |mut i: usize| -> Option<(usize, usize, usize)> {
         i = skip_spaces(i);
         if i >= bytes.len() {
             return None;
@@ -81,4 +81,42 @@ pub fn split_message(input: &str) -> Vec<&str> {
     }
 
     parts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{generate_short_id, split_message};
+
+    // -------- generate_short_id --------
+
+    #[test]
+    fn id_respects_requested_length() {
+        let id = generate_short_id(8);
+        assert_eq!(id.len(), 8);
+
+        let id = generate_short_id(16);
+        assert_eq!(id.len(), 16);
+    }
+
+    #[test]
+    fn id_has_no_dashes() {
+        let id = generate_short_id(24);
+        assert!(!id.contains('-'));
+    }
+
+    #[test]
+    fn id_is_unique_enough_for_tests() {
+        let a = generate_short_id(12);
+        let b = generate_short_id(12);
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn id_never_exceeds_32_when_requesting_more() {
+        // UUID v4 sin guiones = 32 caracteres hex
+        let id = generate_short_id(100);
+        assert_eq!(id.len(), 32);
+    }
+
+    // -------- split_message --------
 }
