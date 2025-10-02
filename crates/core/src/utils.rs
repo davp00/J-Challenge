@@ -85,7 +85,7 @@ pub fn split_message(input: &str) -> Vec<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{generate_short_id, split_message};
+    use super::generate_short_id;
 
     // -------- generate_short_id --------
 
