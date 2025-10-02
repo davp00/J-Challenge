@@ -12,14 +12,15 @@ pub enum ParsedMsg<'a> {
 pub fn parse_line(line: &str) -> Result<ParsedMsg<'_>, SocketError> {
     let msg = line.trim();
 
-    if let Some(rest) = msg.strip_prefix("REQ ") {
+    //TODO find a better way to handle this
+    if let Some(_rest) = msg.strip_prefix("REQ ") {
         let request_data = RequestData::try_from(msg)?;
 
         return Ok(ParsedMsg::Req { data: request_data });
     }
 
     if let Some(rest) = msg.strip_prefix("RES ") {
-        let (id_str, payload) = split_once_space(rest)?;
+        let (id_str, _) = split_once_space(rest)?;
 
         let id = id_str
             .parse::<ReqId>()

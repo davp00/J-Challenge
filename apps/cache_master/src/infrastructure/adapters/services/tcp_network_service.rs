@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
+use app_net::RequestDataInput;
 use async_trait::async_trait;
 use dashmap::{DashMap, Entry};
 
 use crate::{
     core::domain::{models::AppError, services::NetworkService},
-    infrastructure::app_state::{AppNetworkNode, AppNetworkState},
+    infrastructure::{
+        adapters::services::request_all_race_first_abort_rest,
+        app_state::{AppNetworkNode, AppNetworkState},
+    },
 };
 
 pub struct TcpNetworkService {
@@ -50,6 +54,18 @@ impl TcpNetworkService {
         self.nodes.get(master_id)
     }
 
+    pub fn get_all_nodes(&self, node_id: &str) -> Vec<Arc<AppNetworkNode>> {
+        let mut result = Vec::new();
+
+        if let Some(shard) = self.get_shard(node_id) {
+            for entry in shard.iter() {
+                result.push(entry.value().clone());
+            }
+        }
+
+        result
+    }
+
     pub fn pretty_print(&self) {
         println!(
             "🚀 TcpNetworkService: {}",
@@ -82,7 +98,7 @@ impl NetworkService for TcpNetworkService {
             .map(|entry| entry.key().to_string())
     }
 
-    fn get_all_nodes_by_id(&self, node_id: &str) -> Vec<String> {
+    fn get_all_nodes_by_id(&self, _: &str) -> Vec<String> {
         todo!()
     }
 
@@ -191,10 +207,43 @@ impl NetworkService for TcpNetworkService {
         key: &str,
         value: &str,
     ) -> Result<bool, AppError> {
-        todo!()
+        let request = RequestDataInput {
+            action: "PUT",
+            payload: &format!("{} \"{}\"", key, value),
+        };
+
+        let nodes = self.get_all_nodes(node_id);
+
+        let response = request_all_race_first_abort_rest(&nodes, request)
+            .await
+            .map_err(|e| AppError::ConnectionError(e.to_string()))?;
+
+        if response.is_success() {
+            return Ok(true);
+        }
+
+        Err(AppError::ConnectionError(format!(
+            "Error en PUT: {} {}",
+            response.code, response.payload
+        )))
     }
 
     async fn request_get_key(&self, node_id: &str, key: &str) -> Result<Option<String>, AppError> {
-        todo!()
+        let request = RequestDataInput {
+            action: "GET",
+            payload: key,
+        };
+
+        let nodes = self.get_all_nodes(node_id);
+
+        let response = request_all_race_first_abort_rest(&nodes, request)
+            .await
+            .map_err(|e| AppError::ConnectionError(e.to_string()))?;
+
+        if response.is_success() {
+            return Ok(Some(response.payload));
+        }
+
+        Ok(None)
     }
 }

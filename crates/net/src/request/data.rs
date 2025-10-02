@@ -55,6 +55,7 @@ impl<'a> ToString for RequestData<'a> {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct RequestDataInput<'a> {
     pub action: &'a str,
     pub payload: &'a str,

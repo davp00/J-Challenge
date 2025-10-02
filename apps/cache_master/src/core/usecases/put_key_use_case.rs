@@ -64,6 +64,10 @@ impl UseCaseValidatable<PutKeyUseCaseInput, PutKeyUseCaseOutput, AppError> for P
             return Err(AppError::BadRequest("Key is empty".to_string()));
         }
 
+        if input.value.is_empty() {
+            return Err(AppError::BadRequest("Value is empty".to_string()));
+        }
+
         Ok(())
     }
 }

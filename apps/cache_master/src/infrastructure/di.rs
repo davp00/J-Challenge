@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    core::usecases::{AssignNodeUseCase, RemoveNodeUseCase},
+    core::usecases::{AssignNodeUseCase, GetKeyUseCase, PutKeyUseCase, RemoveNodeUseCase},
     infrastructure::{
         adapters::services::{
             dashmap_consistent_hasher_service::DashmapConsistentHasherService,
@@ -15,6 +15,8 @@ pub struct CacheMasterModule {
     pub tcp_network_service: Arc<TcpNetworkService>,
     pub assign_node_use_case: Arc<AssignNodeUseCase>,
     pub delete_node_use_case: Arc<RemoveNodeUseCase>,
+    pub get_key_use_case: Arc<GetKeyUseCase>,
+    pub put_key_use_case: Arc<PutKeyUseCase>,
 }
 
 impl CacheMasterModule {
@@ -34,10 +36,22 @@ impl CacheMasterModule {
             tcp_network_service.clone(),
         ));
 
+        let get_key_use_case = Arc::new(GetKeyUseCase::new(
+            consistent_hasher_service.clone(),
+            tcp_network_service.clone(),
+        ));
+
+        let put_key_use_case = Arc::new(PutKeyUseCase::new(
+            consistent_hasher_service,
+            tcp_network_service.clone(),
+        ));
+
         Self {
             assign_node_use_case,
             tcp_network_service,
             delete_node_use_case,
+            get_key_use_case,
+            put_key_use_case,
         }
     }
 }

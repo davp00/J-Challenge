@@ -8,6 +8,7 @@ use std::time::Duration;
 use app_core::utils::generate_short_id;
 use app_net::request::RequestData;
 use app_net::request::data::RequestDataOwned;
+use app_net::utils::split_message;
 use bytes::Bytes;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
@@ -120,12 +121,13 @@ async fn handle_request_async(app_data: Arc<AppData>, socket: Socket, data: Requ
 
         let response = ResponseData::new(data.id, 200, reply);
 
+        println!("Response: {:?}", response);
         let _ = socket.send_res(response);
     });
 }
 
 async fn handle_request(action: &str, payload: &str, app_data: Arc<AppData>) -> String {
-    let mut parts = payload.splitn(2, ' ');
+    let mut parts = split_message(payload).into_iter();
     let key = parts.next().unwrap_or_default();
 
     match action.to_ascii_uppercase().as_str() {
