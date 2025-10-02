@@ -35,16 +35,16 @@ impl UseCase<RemoveNodeUseCaseInput, RemoveNodeUseCaseOutput, AppError> for Remo
         input: RemoveNodeUseCaseInput,
     ) -> Result<RemoveNodeUseCaseOutput, AppError> {
         let node_id = input.node_id.as_ref();
+        let replica_count = self.network_service.count_replica_nodes(node_id);
 
-        let hasher_service_remove_result = self.hasher_service.remove_node(node_id);
+        let mut hasher_service_remove_result: bool = false;
 
-        println!(
-            "Remove node result from hasher service: {node_id} {hasher_service_remove_result}"
-        );
-        if !hasher_service_remove_result {
-            return Err(AppError::NodeNotFound(format!(
-                "{node_id} in hasher service",
-            )));
+        if replica_count <= 1 {
+            println!(
+                "Remove node result from hasher service: {node_id} {hasher_service_remove_result}"
+            );
+
+            hasher_service_remove_result = self.hasher_service.remove_node(node_id);
         }
 
         let network_service_remove_result = self.network_service.remove_node(node_id).await?;
@@ -59,7 +59,9 @@ impl UseCase<RemoveNodeUseCaseInput, RemoveNodeUseCaseOutput, AppError> for Remo
             )));
         }
 
-        Ok(RemoveNodeUseCaseOutput { success: true })
+        Ok(RemoveNodeUseCaseOutput {
+            success: hasher_service_remove_result && network_service_remove_result,
+        })
     }
 }
 

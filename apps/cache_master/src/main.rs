@@ -2,7 +2,6 @@ use std::{net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 
 use app_core::UseCaseValidatable;
 use bytes::Bytes;
-use dashmap::DashMap;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
@@ -11,19 +10,19 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use app_net::{
-    ParsedMsg, RequestDataInput, ResponseData, Socket, SocketError, parse_line, types::SocketResult,
-};
+use app_net::{ParsedMsg, ResponseData, Socket, SocketError, parse_line, types::SocketResult};
 
 use crate::{
     core::domain::models::{
         AppError, EntryNode, NodeType,
-        usecases::{RemoveNodeUseCaseInput, assign_node_use_case::AssignNodeUseCaseInput},
+        usecases::{
+            GetKeyUseCaseInput, PutKeyUseCaseInput, RemoveNodeUseCaseInput,
+            assign_node_use_case::AssignNodeUseCaseInput,
+        },
     },
     infrastructure::{
         app_state::{AppNetworkNode, AppState},
         di::CacheMasterModule,
-        utils::NodeKind,
     },
 };
 
@@ -42,6 +41,9 @@ async fn main() -> Result<(), AppError> {
     let module_dependencies = Arc::new(CacheMasterModule::build_from_state(app_state.clone()));
 
     let service = module_dependencies.tcp_network_service.clone();
+    let app_state_clone = app_state.clone();
+
+    let modules_dependencies_clone = module_dependencies.clone();
     tokio::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(10));
 
@@ -49,6 +51,40 @@ async fn main() -> Result<(), AppError> {
             interval.tick().await;
             println!("--- Network State {:?} ---", time::Instant::now());
             service.pretty_print();
+
+            if !app_state_clone.network_state.nodes_registry.is_empty() {
+                println!("--- Test Use Cases ---");
+
+                println!(
+                    "PUT KEY {:?}",
+                    modules_dependencies_clone
+                        .put_key_use_case
+                        .validate_and_execute(PutKeyUseCaseInput {
+                            key: "mykey".to_string(),
+                            value: "myvalue".to_string(),
+                        })
+                        .await
+                );
+
+                let key1 = String::from("mykey");
+                let key2 = String::from("mykey2");
+
+                println!(
+                    "GET KEY {:?}",
+                    modules_dependencies_clone
+                        .get_key_use_case
+                        .validate_and_execute(GetKeyUseCaseInput { key: key1 })
+                        .await
+                );
+
+                println!(
+                    "GET KEY {:?}",
+                    modules_dependencies_clone
+                        .get_key_use_case
+                        .validate_and_execute(GetKeyUseCaseInput { key: key2 })
+                        .await
+                );
+            }
         }
     });
 

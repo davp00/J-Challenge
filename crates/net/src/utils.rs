@@ -7,32 +7,49 @@ pub fn split_once_space(input: &str) -> Result<(&str, &str), SocketError> {
 }
 
 pub fn split_message(input: &str) -> Vec<&str> {
-    let mut in_quotes = false;
-    let mut start = 0;
     let mut parts = Vec::new();
+    let mut i = 0;
+    let bytes = input.as_bytes();
 
-    for (i, c) in input.char_indices() {
-        match c {
-            '"' => {
-                if in_quotes {
-                    // fin de comillas -> cerramos token aquí
-                    parts.push(&input[start..i]);
-                }
-                in_quotes = !in_quotes;
-                start = i + 1; // saltamos la comilla
-            }
-            ' ' if !in_quotes => {
-                if start != i {
-                    parts.push(&input[start..i]);
-                }
-                start = i + 1;
-            }
-            _ => {}
+    while i < bytes.len() {
+        // saltar espacios
+        while i < bytes.len() && bytes[i] == b' ' {
+            i += 1;
         }
-    }
 
-    if start < input.len() {
-        parts.push(&input[start..]);
+        if i >= bytes.len() {
+            break;
+        }
+
+        if bytes[i] == b'"' {
+            // token con comillas - buscar la comilla de cierre
+            let start = i + 1; // después de la comilla inicial
+            i += 1;
+            let mut depth = 1;
+
+            while i < bytes.len() {
+                if bytes[i] == b'"' {
+                    // verificar si es la comilla de cierre (seguida por espacio o fin)
+                    if i + 1 >= bytes.len() || bytes[i + 1] == b' ' {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                }
+                i += 1;
+            }
+
+            parts.push(&input[start..i]);
+            i += 1; // saltar la comilla de cierre
+        } else {
+            // token sin comillas
+            let start = i;
+            while i < bytes.len() && bytes[i] != b' ' && bytes[i] != b'"' {
+                i += 1;
+            }
+            parts.push(&input[start..i]);
+        }
     }
 
     parts

@@ -2,8 +2,6 @@ use std::str::FromStr;
 
 use app_net::SocketError;
 
-use crate::core::domain::models::AppError;
-
 #[derive(Debug, Clone)]
 pub enum NodeKind {
     Master(String),

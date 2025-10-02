@@ -4,9 +4,9 @@ use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct ResponseData {
-    req_id: ReqId,
-    code: u16,
-    payload: String,
+    pub req_id: ReqId,
+    pub code: u16,
+    pub payload: String,
 }
 
 impl ResponseData {
@@ -35,6 +35,10 @@ impl ResponseData {
             code,
             parts.get(3).copied().unwrap_or_default().to_string(),
         ))
+    }
+
+    pub fn is_success(&self) -> bool {
+        self.code >= 200 && self.code < 300
     }
 }
 

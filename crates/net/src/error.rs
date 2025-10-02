@@ -16,4 +16,10 @@ pub enum SocketError {
 
     #[error("BadRequest: {0}")]
     BadRequest(String),
+
+    #[error("Error de conexión: {0}")]
+    ConnectionError(String),
+
+    #[error("Error interno: {0}")]
+    Internal(String),
 }
