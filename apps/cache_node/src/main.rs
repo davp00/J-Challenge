@@ -20,6 +20,7 @@ use app_net::{ParsedMsg, RequestDataInput, ResponseData, Socket, parse_line};
 
 pub mod app_common;
 pub mod lru;
+pub mod timing_wheel;
 
 pub(crate) struct AppData {
     cache: Arc<Cache<String, String>>,

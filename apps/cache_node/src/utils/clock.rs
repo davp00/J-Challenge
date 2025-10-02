@@ -22,6 +22,10 @@ impl AppTime {
     pub fn is_before_or_eq(&self, date2: &AppTime) -> bool {
         self.is_before(date2) || self == date2
     }
+
+    pub fn as_millis_u64(&self) -> u64 {
+        self.date
+    }
 }
 
 impl PartialEq for AppTime {
