@@ -11,10 +11,13 @@ pub struct MockHasher {
     pub add_node_result: bool,
     pub node_exists_result: bool,
 
+    // NUEVO: nodo que devolverá get_node_id_from_hash
+    pub node_for_hash: Mutex<Option<String>>,
+
     // para inspección de llamadas
     pub last_add_node: Mutex<Option<String>>,
     pub last_node_exists: Mutex<Option<String>>,
-    pub last_remove_node: Mutex<Option<String>>, // <-- NUEVO
+    pub last_remove_node: Mutex<Option<String>>,
 }
 
 impl MockHasher {
@@ -22,9 +25,10 @@ impl MockHasher {
         Self {
             add_node_result: true,
             node_exists_result: true,
+            node_for_hash: Mutex::new(None), // NUEVO
             last_add_node: Mutex::new(None),
             last_node_exists: Mutex::new(None),
-            last_remove_node: Mutex::new(None), // <-- NUEVO
+            last_remove_node: Mutex::new(None),
         }
     }
 
@@ -34,30 +38,31 @@ impl MockHasher {
             ..Self::new()
         }
     }
+
+    // NUEVO
+    pub fn set_node_for_hash(&self, node_id: Option<&str>) {
+        *self.node_for_hash.lock() = node_id.map(|s| s.to_string());
+    }
 }
 
 impl ConsistentHasherService for MockHasher {
     fn create_hash(&self, _key: &str) -> String {
         "hash".into()
     }
-
     fn add_node(&self, node_id: &str) -> bool {
         *self.last_add_node.lock() = Some(node_id.to_string());
         self.add_node_result
     }
-
     fn remove_node(&self, node_id: &str) -> bool {
-        *self.last_remove_node.lock() = Some(node_id.to_string()); // <-- track
+        *self.last_remove_node.lock() = Some(node_id.to_string());
         true
     }
-
     fn node_exists(&self, node_id: &str) -> bool {
         *self.last_node_exists.lock() = Some(node_id.to_string());
         self.node_exists_result
     }
-
     fn get_node_id_from_hash(&self, _hash: &str) -> Option<String> {
-        None
+        self.node_for_hash.lock().clone() // NUEVO
     }
 }
 
@@ -66,14 +71,17 @@ pub struct MockNetwork {
     pub next_master_for_replica: Mutex<Option<String>>,
     pub add_master_result: Mutex<Result<bool, AppError>>,
     pub add_replica_result: Mutex<Result<bool, AppError>>,
-
     pub replica_count: Mutex<usize>,
     pub remove_result: Mutex<Result<bool, AppError>>,
+
+    // NUEVO: control del GET
+    pub request_get_key_result: Mutex<Result<Option<String>, AppError>>,
 
     // para inspección de llamadas
     pub last_add_master: Mutex<Option<String>>,
     pub last_add_replica: Mutex<Option<(String, String)>>,
-    pub last_remove_node: Mutex<Option<String>>, // <-- NUEVO
+    pub last_remove_node: Mutex<Option<String>>,
+    pub last_request_get: Mutex<Option<(String, String)>>, // NUEVO (node_id, key)
 }
 
 impl MockNetwork {
@@ -84,13 +92,14 @@ impl MockNetwork {
             add_replica_result: Mutex::new(Ok(true)),
             replica_count: Mutex::new(0),
             remove_result: Mutex::new(Ok(true)),
+            request_get_key_result: Mutex::new(Ok(None)), // NUEVO
             last_add_master: Mutex::new(None),
             last_add_replica: Mutex::new(None),
-            last_remove_node: Mutex::new(None), // <-- NUEVO
+            last_remove_node: Mutex::new(None),
+            last_request_get: Mutex::new(None), // NUEVO
         }
     }
 
-    // helpers para configurar
     pub fn set_next_master(&self, id: Option<&str>) {
         *self.next_master_for_replica.lock() = id.map(|s| s.to_string());
     }
@@ -105,6 +114,10 @@ impl MockNetwork {
     }
     pub fn set_remove_result(&self, r: Result<bool, AppError>) {
         *self.remove_result.lock() = r;
+    }
+
+    pub fn set_request_get_key_result(&self, r: Result<Option<String>, AppError>) {
+        *self.request_get_key_result.lock() = r;
     }
 }
 
@@ -131,12 +144,10 @@ impl NetworkService for MockNetwork {
         *self.last_add_replica.lock() = Some((master_node_id.to_string(), node_id.to_string()));
         self.add_replica_result.lock().clone()
     }
-
     async fn remove_node(&self, node_id: &str) -> Result<bool, AppError> {
-        *self.last_remove_node.lock() = Some(node_id.to_string()); // <-- track
+        *self.last_remove_node.lock() = Some(node_id.to_string());
         self.remove_result.lock().clone()
     }
-
     fn count_replica_nodes(&self, _node_id: &str) -> usize {
         *self.replica_count.lock()
     }
@@ -151,11 +162,8 @@ impl NetworkService for MockNetwork {
         Ok(true)
     }
 
-    async fn request_get_key(
-        &self,
-        _node_id: &str,
-        _key: &str,
-    ) -> Result<Option<String>, AppError> {
-        Ok(None)
+    async fn request_get_key(&self, node_id: &str, key: &str) -> Result<Option<String>, AppError> {
+        *self.last_request_get.lock() = Some((node_id.to_string(), key.to_string()));
+        self.request_get_key_result.lock().clone() // NUEVO
     }
 }
