@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum AppError {
     #[error("Socket error: {0}")]
     SocketError(String),

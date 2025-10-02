@@ -26,7 +26,7 @@ impl<V> CacheEntry<V> {
 }
 
 pub struct Cache<K: Eq + Hash + Clone + Send + Sync + 'static, V: Send + Sync + 'static> {
-    map: DashMap<K, CacheEntry<V>>,
+    pub map: DashMap<K, CacheEntry<V>>,
     clock: Arc<AppClock>,
     lru: Mutex<LruState<K>>,
     wheel: TimingWheel<K>,
@@ -179,6 +179,10 @@ impl<K: Eq + Hash + Clone + Send + Sync + 'static, V: Send + Sync + 'static> Cac
                 }
             }
         });
+    }
+
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.map.contains_key(key)
     }
 }
 
