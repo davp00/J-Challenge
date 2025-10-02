@@ -10,49 +10,74 @@ pub fn generate_short_id(len: usize) -> String {
 }
 
 pub fn split_message(input: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut i = 0;
+    let mut parts: Vec<&str> = Vec::with_capacity(4);
     let bytes = input.as_bytes();
+    let mut i = 0usize;
 
-    while i < bytes.len() {
-        // saltar espacios
-        while i < bytes.len() && bytes[i] == b' ' {
-            i += 1;
+    let mut skip_spaces = |mut j: usize| {
+        while j < bytes.len() && bytes[j] == b' ' {
+            j += 1;
         }
+        j
+    };
 
+    let mut read_token = |mut i: usize| -> Option<(usize, usize, usize)> {
+        i = skip_spaces(i);
         if i >= bytes.len() {
-            break;
+            return None;
         }
 
         if bytes[i] == b'"' {
-            // token con comillas - buscar la comilla de cierre
-            let start = i + 1; // después de la comilla inicial
+            let start = i + 1;
             i += 1;
-            let mut depth = 1;
-
+            let mut prev = b'\0';
             while i < bytes.len() {
-                if bytes[i] == b'"' {
-                    // verificar si es la comilla de cierre (seguida por espacio o fin)
-                    if i + 1 >= bytes.len() || bytes[i + 1] == b' ' {
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
-                        }
-                    }
+                let b = bytes[i];
+                if b == b'"' && prev != b'\\' {
+                    let end = i;
+                    i += 1;
+                    return Some((start, end, i));
                 }
+                prev = b;
                 i += 1;
             }
-
-            parts.push(&input[start..i]);
-            i += 1; // saltar la comilla de cierre
+            Some((start, bytes.len(), bytes.len()))
         } else {
-            // token sin comillas
             let start = i;
-            while i < bytes.len() && bytes[i] != b' ' && bytes[i] != b'"' {
+            while i < bytes.len() && bytes[i] != b' ' {
                 i += 1;
             }
-            parts.push(&input[start..i]);
+            Some((start, i, i))
         }
+    };
+
+    // 1) Cabecera: 3 tokens
+    while parts.len() < 3 {
+        match read_token(i) {
+            Some((s, e, next)) => {
+                parts.push(&input[s..e]);
+                i = next;
+            }
+            None => break,
+        }
+    }
+
+    // 2) Resto como payload único (sin comillas exteriores si las hay)
+    i = skip_spaces(i);
+    if i < bytes.len() {
+        let mut end = bytes.len();
+        while end > i && (bytes[end - 1] == b'\r' || bytes[end - 1] == b'\n') {
+            end -= 1;
+        }
+
+        // recorta comillas exteriores opcionales
+        let (mut s, mut e) = (i, end);
+        if e > s && bytes[s] == b'"' && bytes[e - 1] == b'"' {
+            s += 1;
+            e -= 1;
+        }
+
+        parts.push(&input[s..e]);
     }
 
     parts

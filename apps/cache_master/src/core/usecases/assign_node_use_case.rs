@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use app_core::{UseCase, UseCaseValidatable};
 use async_trait::async_trait;
+use tracing::info;
 
 use crate::core::domain::{
     models::{
@@ -72,7 +73,7 @@ impl UseCase<AssignNodeUseCaseInput, AssignNodeUseCaseOutput, AppError> for Assi
         &self,
         input: AssignNodeUseCaseInput,
     ) -> Result<AssignNodeUseCaseOutput, AppError> {
-        println!("New Node: {:?}", input);
+        info!("New Node: {:?}", input);
         match input.node_type {
             NodeType::Master => self.handle_master_insert(input).await,
             NodeType::Replica => self.handle_replica_insert(input).await,

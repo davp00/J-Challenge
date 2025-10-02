@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use app_core::{UseCase, UseCaseValidatable};
 use async_trait::async_trait;
+use tracing::info;
 
 use crate::core::domain::{
     models::{
@@ -40,7 +41,7 @@ impl UseCase<RemoveNodeUseCaseInput, RemoveNodeUseCaseOutput, AppError> for Remo
         let mut hasher_service_remove_result: bool = false;
 
         if replica_count <= 1 {
-            println!(
+            info!(
                 "Remove node result from hasher service: {node_id} {hasher_service_remove_result}"
             );
 
@@ -49,9 +50,7 @@ impl UseCase<RemoveNodeUseCaseInput, RemoveNodeUseCaseOutput, AppError> for Remo
 
         let network_service_remove_result = self.network_service.remove_node(node_id).await?;
 
-        println!(
-            "Remove node result from network service: {node_id} {network_service_remove_result}"
-        );
+        info!("Remove node result from network service: {node_id} {network_service_remove_result}");
 
         if !network_service_remove_result {
             return Err(AppError::NodeNotFound(format!(

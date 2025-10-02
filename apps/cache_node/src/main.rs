@@ -9,6 +9,9 @@ use bytes::Bytes;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tracing::{error, info, trace};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::core::domain::models::{AppError, Response};
 use crate::core::services::ActionParserService;
@@ -32,7 +35,6 @@ async fn handle_request_async(
 
         let response = ResponseData::new(data.id, 200, reply);
 
-        println!("Response: {:?}", response);
         let _ = socket.send_res(response);
     });
 }
@@ -45,12 +47,16 @@ async fn handle_request(app_module: Arc<CacheNodeModule>, action: &str, payload:
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     let role = env::var("ROLE").unwrap_or_else(|_| "MASTER".to_string());
     let short_id = generate_short_id(8);
 
     let node_identity = format!("{role} {short_id}");
 
-    println!("Node Identity: {node_identity}");
+    info!("Node Identity: {node_identity}");
 
     let app_module = Arc::new(CacheNodeModule::init_dependencies());
 
@@ -71,7 +77,7 @@ async fn main() -> Result<(), AppError> {
         tokio::spawn(async move {
             while let Some(bytes) = rx.recv().await {
                 if let Err(e) = writer.write_all(&bytes).await {
-                    eprintln!("[{id}] write error: {e}");
+                    error!("[{id}] write error: {e}");
                     break;
                 }
             }
@@ -85,8 +91,8 @@ async fn main() -> Result<(), AppError> {
     let req_socket = connection_socket.clone();
 
     tokio::spawn(async move {
-        println!(
-            "Request Response: {:?}",
+        trace!(
+            "PING: {:?}",
             req_socket.request(RequestDataInput::new("PING", "")).await
         );
     });
@@ -103,7 +109,7 @@ async fn main() -> Result<(), AppError> {
                 .map_err(|e| AppError::SocketReadingError(e.to_string()))?;
 
             if n == 0 {
-                println!("[{}] servidor cerró la conexión", connection_socket.id);
+                info!("[{}] servidor cerró la conexión", connection_socket.id);
                 break;
             }
 
@@ -113,14 +119,14 @@ async fn main() -> Result<(), AppError> {
 
             match current_line {
                 ParsedMsg::Req { data } => {
-                    println!("{:?}", data);
+                    //info!("{:?}", data);
                     handle_request_async(app_module.clone(), connection_socket.clone(), data).await;
                 }
                 ParsedMsg::Res { id, raw_response } => {
                     connection_socket.handle_response(id, raw_response.to_string());
                 }
                 ParsedMsg::Other(msg) => {
-                    println!("[srv] {msg}");
+                    info!("[srv] {msg}");
                 }
             }
         }

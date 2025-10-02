@@ -6,8 +6,9 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
     sync::mpsc,
-    time,
 };
+use tracing::{error, info};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 
 use app_net::{
@@ -19,13 +20,10 @@ use app_net::{
 use crate::{
     core::domain::models::{
         AppError, EntryNode, NodeType,
-        usecases::{
-            GetKeyUseCaseInput, PutKeyUseCaseInput, RemoveNodeUseCaseInput,
-            assign_node_use_case::AssignNodeUseCaseInput,
-        },
+        usecases::{RemoveNodeUseCaseInput, assign_node_use_case::AssignNodeUseCaseInput},
     },
     infrastructure::{
-        adapters::controllers::request_controller::{self, RequestController},
+        adapters::controllers::request_controller::RequestController,
         app_state::{AppNetworkNode, AppState},
         di::CacheMasterModule,
     },
@@ -53,23 +51,27 @@ async fn handle_request_async(
             ResponseData::new(data.id, 500, format!("ERROR {}", reply.err().unwrap()))
         };
 
-        println!("Response: {:?}", response);
         let _ = socket.send_res(response);
     });
 }
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     let listener = TcpListener::bind("0.0.0.0:5555")
         .await
         .map_err(|e| AppError::SocketError(format!("bind error: {e}")))?;
 
-    println!("App listen in: {:?}", listener.local_addr().unwrap());
+    info!("App listen in: {:?}", listener.local_addr().unwrap());
 
     let app_state = AppState::new_shared();
     let module_dependencies = Arc::new(CacheMasterModule::build_from_state(app_state.clone()));
     let request_controller = Arc::new(RequestController::new(module_dependencies.clone()));
 
+    /*
     let service = module_dependencies.tcp_network_service.clone();
     //let app_state_clone = app_state.clone();
 
@@ -83,7 +85,7 @@ async fn main() -> Result<(), AppError> {
             service.pretty_print();
             println!("---------------------------");
         }
-    });
+    });*/
 
     loop {
         let (socket, addr) = listener
@@ -105,7 +107,7 @@ async fn main() -> Result<(), AppError> {
             )
             .await
             {
-                eprintln!("conn error: {e}");
+                error!("conn error: {e}");
             }
         });
     }
@@ -160,12 +162,10 @@ async fn handle_conn(
                 .await
                 .ok();
         }
-        NodeType::Client => {
-            println!("Client connected: {}", entry_node.id);
-        }
+        NodeType::Client => {}
     };
 
-    println!("Conectado {} desde {addr}", id);
+    info!("Conectado {} desde {addr}", id);
 
     let writer_task = {
         let node_id = id.clone();
@@ -173,11 +173,11 @@ async fn handle_conn(
         tokio::spawn(async move {
             while let Some(bytes) = rx.recv().await {
                 if let Err(e) = writer.write_all(&bytes).await {
-                    eprintln!("[{node_id}] write error: {e}");
+                    error!("[{node_id}] write error: {e}");
                     break;
                 }
             }
-            println!("[{node_id}] writer task ended");
+            info!("[{node_id}] writer task ended");
         })
     };
 
@@ -200,12 +200,11 @@ async fn handle_conn(
                 connection_socket.handle_response(id, raw_response.to_string());
             }
             ParsedMsg::Req { data } => {
-                println!("{:?}", data);
                 handle_request_async(request_controller.clone(), connection_socket.clone(), data)
                     .await;
             }
             ParsedMsg::Other(msg) => {
-                println!("Other Req: [] -> {msg}");
+                info!("Other Req: [] -> {msg}");
             }
         }
     }
