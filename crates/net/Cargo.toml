@@ -1,12 +1,11 @@
 [package]
-name = "cache_node"
+name = "app_net"
 version = "0.1.0"
 edition.workspace = true
 
+
 [dependencies]
 tokio = { workspace = true }
-thiserror = { workspace = true }
 dashmap = { workspace = true }
+thiserror = { workspace = true }
 bytes = { workspace = true }
-app_net = { path = "../../crates/net" }
-app_core = { path = "../../crates/core" }

@@ -7,3 +7,9 @@ edition.workspace = true
 tokio = { workspace = true }
 thiserror = { workspace = true }
 dashmap = { workspace = true }
+bytes = { workspace = true }
+uuid = { workspace = true }
+async-trait = { workspace = true }
+app_net = { path = "../../crates/net" }
+app_core = { path = "../../crates/core" }
+parking_lot = "0.12.4"

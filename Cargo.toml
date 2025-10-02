@@ -1,11 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["apps/cache_node", "apps/cache_master"]
+members = ["apps/cache_node", "apps/cache_master", "crates/core", "crates/net"]
 
 [workspace.dependencies]
 tokio = { version = "1.47.1", features = ["full"] }
 thiserror = { version = "2" }
 dashmap = { version = "6.1.0" }
+bytes = { version = "1.10.1" }
+uuid = { version = "1.18.1", features = ["v4"] }
+async-trait = { version = "0.1.89" }
 
 [workspace.package]
 edition = "2024"
