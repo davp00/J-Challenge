@@ -27,7 +27,7 @@ impl<V> CacheEntry<V> {
 
 pub struct Cache<K: Eq + Hash + Clone + Send + Sync + 'static, V: Send + Sync + 'static> {
     pub map: DashMap<K, CacheEntry<V>>,
-    clock: Arc<AppClock>,
+    pub clock: Arc<AppClock>,
     lru: Mutex<LruState<K>>,
     wheel: TimingWheel<K>,
 }
@@ -53,13 +53,8 @@ impl<K: Eq + Hash + Clone + Send + Sync + 'static, V: Send + Sync + 'static> Cac
         Self::new_with_capacity(1024, 1024, 1000)
     }
 
-    pub fn put(&self, key: K, value: V, ttl: Option<u64>) -> bool {
-        let expires_at = match ttl {
-            Some(ttl_ms) => Some(AppTime::new(
-                self.clock.now_millis().as_millis_u64() + ttl_ms,
-            )),
-            None => None,
-        };
+    pub fn put(&self, key: K, value: V, expires_at: Option<u64>) -> bool {
+        let expires_at = expires_at.map(AppTime::new);
 
         if let Some(exp) = &expires_at {
             self.wheel.schedule(key.clone(), exp.as_millis_u64());
