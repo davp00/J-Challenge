@@ -10,9 +10,11 @@ pub struct InMemCache {
 
 impl InMemCache {
     pub fn new() -> Self {
-        Self {
-            cache: Cache::new(),
-        }
+        let cache: Arc<Cache<String, String>> = Cache::new();
+
+        cache.start_reaper();
+
+        Self { cache }
     }
 }
 

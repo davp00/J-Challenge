@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use app_core::clock::AppClock;
+
 use crate::{
     core::usecases::{AssignNodeUseCase, GetKeyUseCase, PutKeyUseCase, RemoveNodeUseCase},
     infrastructure::{
@@ -25,6 +27,7 @@ impl CacheMasterModule {
         let tcp_network_service = Arc::new(TcpNetworkService::from_state(
             app_state.network_state.clone(),
         ));
+        let clock = Arc::new(AppClock::new());
 
         let assign_node_use_case = Arc::new(AssignNodeUseCase::new(
             consistent_hasher_service.clone(),
@@ -44,6 +47,7 @@ impl CacheMasterModule {
         let put_key_use_case = Arc::new(PutKeyUseCase::new(
             consistent_hasher_service,
             tcp_network_service.clone(),
+            clock.clone(),
         ));
 
         Self {

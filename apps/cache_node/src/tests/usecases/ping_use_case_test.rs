@@ -1,13 +1,6 @@
-use crate::core::domain::models::Response;
-
-pub async fn exec_ping() -> Response {
-    Response::Pong
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::core::domain::models::Response;
+    use crate::core::{domain::models::Response, usecases::exec_ping};
 
     #[tokio::test]
     async fn exec_ping_returns_pong() {

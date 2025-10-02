@@ -1,4 +1,4 @@
-use std::{f32::consts::E, sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant};
 
 use axum::{
     Json,

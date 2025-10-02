@@ -31,6 +31,7 @@ use crate::{
 
 pub mod core;
 pub mod infrastructure;
+pub mod tests;
 
 async fn handle_request_async(
     request_controller: Arc<RequestController>,

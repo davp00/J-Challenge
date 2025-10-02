@@ -1,5 +1,4 @@
 use app_core::utils::split_message;
-use tracing::trace;
 
 use crate::{error::SocketError, types::ReqId};
 use std::convert::TryFrom;

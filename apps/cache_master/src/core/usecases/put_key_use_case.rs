@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use app_core::{UseCase, UseCaseValidatable};
+use app_core::{UseCase, UseCaseValidatable, clock::Clock};
 use async_trait::async_trait;
 use tracing::trace;
 
@@ -15,16 +15,19 @@ use crate::core::domain::{
 pub struct PutKeyUseCase {
     hasher_service: Arc<dyn ConsistentHasherService>,
     network_service: Arc<dyn NetworkService>,
+    clock: Arc<dyn Clock>,
 }
 
 impl PutKeyUseCase {
     pub fn new(
         hasher_service: Arc<dyn ConsistentHasherService>,
         network_service: Arc<dyn NetworkService>,
+        clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
             hasher_service,
             network_service,
+            clock,
         }
     }
 }
@@ -46,9 +49,14 @@ impl UseCase<PutKeyUseCaseInput, PutKeyUseCaseOutput, AppError> for PutKeyUseCas
         let node_id = node_id_option.unwrap();
         trace!("Node ID {} for key: {} {:?}", node_id, input.key, input.ttl);
 
+        let expires_at = match input.ttl {
+            Some(ttl_ms) => Some(self.clock.now_millis().as_millis_u64() + ttl_ms),
+            None => None,
+        };
+
         let put_result = self
             .network_service
-            .request_put_key(&node_id, &input.key, &input.value, input.ttl)
+            .request_put_key(&node_id, &input.key, &input.value, expires_at)
             .await?;
 
         Ok(PutKeyUseCaseOutput {
