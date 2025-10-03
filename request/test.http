@@ -8,7 +8,7 @@ Content-Type: application/json
 
 {
   "value": "hola",
-  "ttl": 10000
+  "ttl": 100000
 }
 
 ### Get

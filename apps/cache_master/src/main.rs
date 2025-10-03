@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
+use std::{env, net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 
 use app_core::UseCaseValidatable;
 use bytes::Bytes;
@@ -62,7 +62,14 @@ async fn main() -> Result<(), AppError> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let listener = TcpListener::bind("0.0.0.0:5555")
+    let port = env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(5555);
+
+    let addr: String = format!("0.0.0.0:{port}");
+
+    let listener = TcpListener::bind(addr)
         .await
         .map_err(|e| AppError::SocketError(format!("bind error: {e}")))?;
 
