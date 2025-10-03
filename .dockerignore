@@ -1,0 +1,9 @@
+target/
+**/*.rs.bk
+.git/
+.gitignore
+*.md
+.env
+.env.*
+apps/*/target/
+crates/*/target/

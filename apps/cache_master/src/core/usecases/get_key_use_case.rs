@@ -56,7 +56,7 @@ impl UseCase<GetKeyUseCaseInput, GetKeyUseCaseOutput, AppError> for GetKeyUseCas
         Ok(GetKeyUseCaseOutput {
             success: true,
             result: get_result.unwrap_or_default(),
-        }) // TODO: Implement actual logic
+        })
     }
 }
 
